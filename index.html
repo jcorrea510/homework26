@@ -1,247 +1,235 @@
-import { useState, useEffect } from "react";
-import { motion, Reorder } from "framer-motion";
-import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Homework Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .fade-enter { opacity: 0; transform: translateY(10px); }
+    .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
+    .fade-exit { opacity: 1; transform: translateY(0); }
+    .fade-exit-active { opacity: 0; transform: translateY(-10px); transition: all 0.3s ease; }
+  </style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen p-6">
+  <div class="max-w-7xl mx-auto">
+    <header class="text-center mb-8">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400">Homework Tracker</h1>
+      <p class="text-gray-400">Organize tasks, plan tonight, and auto-schedule.</p>
+    </header>
 
-const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
-
-const getStartOfWeek = (date) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
-  return new Date(d.setDate(diff));
-};
-
-export default function HomeworkTracker() {
-  const [today] = useState(new Date());
-  const [weekStart, setWeekStart] = useState(getStartOfWeek(new Date()));
-  const [tasks, setTasks] = useState({}); // { dateString: { className: [tasks] } }
-  const [tonight, setTonight] = useState([]);
-  const [schedule, setSchedule] = useState([]);
-  const [startTime, setStartTime] = useState("");
-
-  const weekDays = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate() + i);
-    return d;
-  });
-
-  const addTask = (day, className, name) => {
-    setTasks((prev) => {
-      const key = day.toDateString();
-      const updated = { ...prev };
-      if (!updated[key]) updated[key] = {};
-      if (!updated[key][className]) updated[key][className] = [];
-      updated[key][className] = [...updated[key][className], name];
-      return updated;
-    });
-  };
-
-  const addTonight = (name) => {
-    if (tonight.find((t) => t.name === name)) return;
-    setTonight([...tonight, { id: crypto.randomUUID(), name, time: 30, done: false }]);
-  };
-
-  const updateTask = (id, updates) => {
-    setTonight((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
-  };
-
-  const generateSchedule = () => {
-    let start = startTime;
-    if (!start) {
-      const now = new Date();
-      start = `${String(now.getHours()).padStart(2, "0")}:${String(
-        now.getMinutes()
-      ).padStart(2, "0")}`;
-    }
-    let current = new Date();
-    const [h, m] = start.split(":").map(Number);
-    current.setHours(h, m, 0, 0);
-
-    const ordered = [...tonight].sort((a, b) => Number(a.done) - Number(b.done));
-    const scheduleItems = [];
-    ordered.forEach((task) => {
-      const end = new Date(current.getTime() + task.time * 60000);
-      scheduleItems.push({
-        name: task.name,
-        start: current.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        end: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      });
-      current = end;
-    });
-    setSchedule(scheduleItems);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
-      <header className="text-center mb-8">
-        <h1 className="text-5xl font-extrabold text-blue-400">Homework Tracker</h1>
-        <p className="text-gray-400">Organize tasks, plan tonight, and auto-schedule.</p>
-      </header>
-
-      {/* Week Navigation */}
-      <div className="flex justify-between items-center mb-6">
-        <Button
-          variant="outline"
-          onClick={() => setWeekStart((prev) => new Date(prev.setDate(prev.getDate() - 7)))}
-          className="rounded-full"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </Button>
-        <h2 className="text-2xl font-bold">
-          Week of {weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-        </h2>
-        <Button
-          variant="outline"
-          onClick={() => setWeekStart((prev) => new Date(prev.setDate(prev.getDate() + 7)))}
-          className="rounded-full"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </Button>
-      </div>
-
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6">
-        {weekDays.map((day) => (
-          <Card key={day.toDateString()} className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4">
-              <h3 className="text-xl font-semibold mb-2 text-center">
-                {day.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
-              </h3>
-              {classes.map((cls) => (
-                <div key={cls} className="mb-3">
-                  <p className="font-medium text-gray-300">{cls}</p>
-                  <Input
-                    placeholder="Add assignment..."
-                    className="mt-1"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                        addTask(day, cls, e.currentTarget.value.trim());
-                        if (
-                          day.getDate() === today.getDate() + 1 ||
-                          (today.getDay() === 6 || today.getDay() === 0)
-                        ) {
-                          addTonight(e.currentTarget.value.trim());
-                        }
-                        e.currentTarget.value = "";
-                      }
-                    }}
-                  />
-                  <ul className="mt-2 space-y-1">
-                    {(tasks[day.toDateString()]?.[cls] || []).map((t, i) => (
-                      <li key={i} className="flex justify-between bg-gray-800 rounded-lg px-2 py-1 text-sm">
-                        {t}
-                        <Button size="xs" className="ml-2" onClick={() => addTonight(t)}>
-                          Tonight
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Tonight Section */}
-      <Card className="bg-gray-900 border-gray-800 mt-10">
-        <CardContent className="p-6">
-          <h2 className="text-2xl font-bold mb-4 text-center">Tonight</h2>
-          <Reorder.Group axis="y" values={tonight} onReorder={setTonight}>
-            {tonight.map((t) => (
-              <Reorder.Item
-                key={t.id}
-                value={t}
-                className="flex items-center justify-between bg-gray-800 p-3 mb-2 rounded-lg"
-              >
-                <div className="flex items-center gap-2">
-                  <GripVertical className="w-4 h-4 text-gray-500" />
-                  <input
-                    type="checkbox"
-                    checked={t.done}
-                    onChange={() => updateTask(t.id, { done: !t.done })}
-                    className="accent-blue-500 w-5 h-5"
-                  />
-                  <span className={`text-lg ${t.done ? "line-through text-gray-500" : ""}`}>
-                    {t.name}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span>⏱</span>
-                  <Input
-                    type="number"
-                    value={t.time}
-                    onChange={(e) => updateTask(t.id, { time: parseInt(e.target.value) || 30 })}
-                    className="w-20"
-                  />
-                  <span>mins</span>
-                </div>
-              </Reorder.Item>
-            ))}
-          </Reorder.Group>
-
-          {/* Custom Task */}
-          <div className="flex mt-4 gap-2">
-            <Input
-              placeholder="Custom task..."
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                  addTonight(e.currentTarget.value.trim());
-                  e.currentTarget.value = "";
-                }
-              }}
-            />
-            <Button
-              onClick={() => {
-                const inp = document.querySelector("#custom-task");
-              }}
-            >
-              Add
-            </Button>
-          </div>
-
-          {/* Schedule Generator */}
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-2">Generate Schedule</h3>
-            <div className="flex gap-2 mb-2 items-center">
-              <Input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-              <Button
-                size="sm"
-                onClick={() =>
-                  setStartTime(new Date().toTimeString().slice(0, 5))
-                }
-              >
-                Current
-              </Button>
-            </div>
-            <Button className="w-full" onClick={generateSchedule}>
-              Create My Schedule
-            </Button>
-            <ul className="mt-4 space-y-2">
-              {schedule.map((s, i) => (
-                <li key={i} className="bg-gray-800 rounded-lg p-2">
-                  <p className="font-semibold">{s.name}</p>
-                  <p className="text-sm text-gray-400">
-                    {s.start} - {s.end}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="mt-4 flex justify-between text-sm text-gray-400">
-            <p>To Do: {tonight.filter((t) => !t.done).length}</p>
-            <p>Done: {tonight.filter((t) => t.done).length}</p>
-          </div>
-        </CardContent>
-      </Card>
+    <!-- Week Navigation -->
+    <div class="flex justify-between items-center mb-6">
+      <button id="prev-week" class="px-3 py-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">◀</button>
+      <h2 id="week-label" class="text-2xl font-bold"></h2>
+      <button id="next-week" class="px-3 py-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">▶</button>
     </div>
-  );
-}
+
+    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-10"></div>
+
+    <!-- Tonight Section -->
+    <div class="bg-gray-900 rounded-2xl p-6 shadow-xl">
+      <h2 class="text-2xl font-bold mb-4 text-center">Tonight</h2>
+      <ul id="tonight-list" class="space-y-2 mb-4"></ul>
+
+      <div class="flex gap-2 mb-6">
+        <input id="custom-task-input" type="text" placeholder="Custom task..." class="flex-1 bg-gray-700 p-2 rounded-lg">
+        <button id="add-custom" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition">Add</button>
+      </div>
+
+      <div>
+        <h3 class="text-lg font-semibold mb-2">Generate Schedule</h3>
+        <div class="flex gap-2 mb-2 items-center">
+          <input type="time" id="schedule-start-time-input" class="p-2 bg-gray-700 rounded-lg">
+          <button id="current-time" class="px-2 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition">Current</button>
+        </div>
+        <button id="generate-schedule" class="w-full px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition mb-4">Create My Schedule</button>
+        <ul id="schedule-list" class="space-y-2"></ul>
+      </div>
+
+      <div class="mt-4 flex justify-between text-sm text-gray-400">
+        <p>To Do: <span id="todo-count">0</span></p>
+        <p>Done: <span id="done-count">0</span></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const classes = ["Math","English","Spanish","Comp Sci","HOTA","Physics"];
+    let today = new Date();
+    let weekStart = getStartOfWeek(new Date());
+    let tasks = {};
+    let tonight = [];
+
+    function getStartOfWeek(date){
+      const d=new Date(date);
+      const day=d.getDay();
+      const diff=d.getDate()-day+(day===0?-6:1);
+      return new Date(d.setDate(diff));
+    }
+
+    function renderWeek(){
+      document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
+      const grid=document.getElementById('calendar-grid');
+      grid.innerHTML='';
+      for(let i=0;i<5;i++){
+        const day=new Date(weekStart);
+        day.setDate(weekStart.getDate()+i);
+        const card=document.createElement('div');
+        card.className='bg-gray-900 p-4 rounded-xl shadow-lg hover:shadow-2xl transition';
+        const title=document.createElement('h3');
+        title.className='text-xl font-semibold text-center mb-2';
+        title.textContent=day.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+        card.appendChild(title);
+        classes.forEach(cls=>{
+          const section=document.createElement('div');
+          section.className='mb-3';
+          const label=document.createElement('p');
+          label.className='font-medium text-gray-300';
+          label.textContent=cls;
+          section.appendChild(label);
+          const input=document.createElement('input');
+          input.className='w-full bg-gray-700 p-2 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500';
+          input.placeholder='Add assignment...';
+          input.addEventListener('keydown',e=>{
+            if(e.key==='Enter'&&e.target.value.trim()!==''){
+              addTask(day,cls,e.target.value.trim());
+              if(day.getDate()===today.getDate()+1||today.getDay()===6||today.getDay()===0){
+                addTonight(e.target.value.trim());
+              }
+              e.target.value='';
+            }
+          });
+          section.appendChild(input);
+          const ul=document.createElement('ul');
+          ul.id=`${day.toDateString()}-${cls}`;
+          ul.className='mt-2 space-y-1';
+          section.appendChild(ul);
+          card.appendChild(section);
+        });
+        grid.appendChild(card);
+      }
+      renderTasks();
+    }
+
+    function addTask(day,cls,name){
+      const key=day.toDateString();
+      if(!tasks[key])tasks[key]={};
+      if(!tasks[key][cls])tasks[key][cls]=[];
+      tasks[key][cls].push(name);
+      renderTasks();
+    }
+
+    function renderTasks(){
+      Object.keys(tasks).forEach(day=>{
+        Object.keys(tasks[day]).forEach(cls=>{
+          const ul=document.getElementById(`${day}-${cls}`);
+          if(!ul)return;
+          ul.innerHTML='';
+          tasks[day][cls].forEach(t=>{
+            const li=document.createElement('li');
+            li.className='flex justify-between bg-gray-800 rounded-lg px-2 py-1 text-sm transition hover:bg-gray-700';
+            li.innerHTML = `<span>${t}</span>`;
+            const btn=document.createElement('button');
+            btn.textContent='Tonight';
+            btn.className='ml-2 px-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition';
+            btn.onclick=()=>addTonight(t);
+            li.appendChild(btn);
+            ul.appendChild(li);
+          });
+        });
+      });
+    }
+
+    function addTonight(name){
+      if(tonight.find(t=>t.name===name))return;
+      tonight.push({id:crypto.randomUUID(),name,time:30,done:false});
+      renderTonight();
+    }
+
+    function renderTonight(){
+      const list=document.getElementById('tonight-list');
+      list.innerHTML='';
+      tonight.forEach(t=>{
+        const li=document.createElement('li');
+        li.className='flex justify-between items-center bg-gray-800 p-2 rounded-lg fade-enter';
+        setTimeout(()=>li.classList.remove('fade-enter'),10);
+
+        const left=document.createElement('div');
+        left.className='flex items-center gap-2';
+        const cb=document.createElement('input');
+        cb.type='checkbox';
+        cb.checked=t.done;
+        cb.onchange=()=>{t.done=!t.done;renderTonight();};
+        const span=document.createElement('span');
+        span.textContent=t.name;
+        if(t.done)span.className='line-through text-gray-500';
+        left.appendChild(cb);left.appendChild(span);
+
+        const right=document.createElement('div');
+        right.className='flex items-center gap-1';
+        const inp=document.createElement('input');
+        inp.type='number';inp.value=t.time;
+        inp.className='w-16 bg-gray-700 p-1 rounded text-center';
+        inp.onchange=e=>{t.time=parseInt(e.target.value)||30;};
+        right.append('⏱',inp,'mins');
+
+        li.append(left,right);
+        list.appendChild(li);
+      });
+
+      // enable drag and drop
+      new Sortable(list, { animation: 150, handle: '', onEnd: ()=>{
+        const newOrder=[];
+        list.querySelectorAll('li').forEach(li=>{
+          const name=li.querySelector('span').textContent;
+          const task=tonight.find(t=>t.name===name);
+          if(task)newOrder.push(task);
+        });
+        tonight=newOrder;
+      }});
+
+      document.getElementById('todo-count').textContent=tonight.filter(t=>!t.done).length;
+      document.getElementById('done-count').textContent=tonight.filter(t=>t.done).length;
+    }
+
+    function generateSchedule(){
+      let start=document.getElementById('schedule-start-time-input').value;
+      if(!start){
+        const now=new Date();
+        start=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      }
+      let current=new Date();
+      const [h,m]=start.split(':').map(Number);
+      current.setHours(h,m,0,0);
+      const schedule=document.getElementById('schedule-list');
+      schedule.innerHTML='';
+      tonight.filter(t=>!t.done).forEach(t=>{
+        const end=new Date(current.getTime()+t.time*60000);
+        const li=document.createElement('li');
+        li.className='bg-gray-800 p-2 rounded-lg fade-enter';
+        setTimeout(()=>li.classList.remove('fade-enter'),10);
+        li.innerHTML=`<p class='font-semibold'>${t.name}</p><p class='text-sm text-gray-400'>${current.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>`;
+        schedule.appendChild(li);
+        current=end;
+      });
+    }
+
+    document.getElementById('prev-week').onclick=()=>{weekStart.setDate(weekStart.getDate()-7);renderWeek();};
+    document.getElementById('next-week').onclick=()=>{weekStart.setDate(weekStart.getDate()+7);renderWeek();};
+    document.getElementById('add-custom').onclick=()=>{
+      const val=document.getElementById('custom-task-input').value.trim();
+      if(val){addTonight(val);document.getElementById('custom-task-input').value='';}
+    };
+    document.getElementById('current-time').onclick=()=>{
+      document.getElementById('schedule-start-time-input').value=new Date().toTimeString().slice(0,5);
+    };
+    document.getElementById('generate-schedule').onclick=generateSchedule;
+
+    renderWeek();
+  </script>
+</body>
+</html>
