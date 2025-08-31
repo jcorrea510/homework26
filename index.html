@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, Reorder } from "framer-motion";
 import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Reorder } from "framer-motion";
 
 const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
 
@@ -20,6 +19,8 @@ export default function HomeworkTracker() {
   const [weekStart, setWeekStart] = useState(getStartOfWeek(new Date()));
   const [tasks, setTasks] = useState({}); // { dateString: { className: [tasks] } }
   const [tonight, setTonight] = useState([]);
+  const [schedule, setSchedule] = useState([]);
+  const [startTime, setStartTime] = useState("");
 
   const weekDays = Array.from({ length: 5 }, (_, i) => {
     const d = new Date(weekStart);
@@ -45,6 +46,32 @@ export default function HomeworkTracker() {
 
   const updateTask = (id, updates) => {
     setTonight((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+  };
+
+  const generateSchedule = () => {
+    let start = startTime;
+    if (!start) {
+      const now = new Date();
+      start = `${String(now.getHours()).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}`;
+    }
+    let current = new Date();
+    const [h, m] = start.split(":").map(Number);
+    current.setHours(h, m, 0, 0);
+
+    const ordered = [...tonight].sort((a, b) => Number(a.done) - Number(b.done));
+    const scheduleItems = [];
+    ordered.forEach((task) => {
+      const end = new Date(current.getTime() + task.time * 60000);
+      scheduleItems.push({
+        name: task.name,
+        start: current.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        end: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      });
+      current = end;
+    });
+    setSchedule(scheduleItems);
   };
 
   return (
@@ -75,6 +102,7 @@ export default function HomeworkTracker() {
         </Button>
       </div>
 
+      {/* Calendar Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6">
         {weekDays.map((day) => (
           <Card key={day.toDateString()} className="bg-gray-900 border-gray-800">
@@ -105,11 +133,7 @@ export default function HomeworkTracker() {
                     {(tasks[day.toDateString()]?.[cls] || []).map((t, i) => (
                       <li key={i} className="flex justify-between bg-gray-800 rounded-lg px-2 py-1 text-sm">
                         {t}
-                        <Button
-                          size="xs"
-                          className="ml-2"
-                          onClick={() => addTonight(t)}
-                        >
+                        <Button size="xs" className="ml-2" onClick={() => addTonight(t)}>
                           Tonight
                         </Button>
                       </li>
@@ -158,6 +182,60 @@ export default function HomeworkTracker() {
               </Reorder.Item>
             ))}
           </Reorder.Group>
+
+          {/* Custom Task */}
+          <div className="flex mt-4 gap-2">
+            <Input
+              placeholder="Custom task..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                  addTonight(e.currentTarget.value.trim());
+                  e.currentTarget.value = "";
+                }
+              }}
+            />
+            <Button
+              onClick={() => {
+                const inp = document.querySelector("#custom-task");
+              }}
+            >
+              Add
+            </Button>
+          </div>
+
+          {/* Schedule Generator */}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Generate Schedule</h3>
+            <div className="flex gap-2 mb-2 items-center">
+              <Input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+              <Button
+                size="sm"
+                onClick={() =>
+                  setStartTime(new Date().toTimeString().slice(0, 5))
+                }
+              >
+                Current
+              </Button>
+            </div>
+            <Button className="w-full" onClick={generateSchedule}>
+              Create My Schedule
+            </Button>
+            <ul className="mt-4 space-y-2">
+              {schedule.map((s, i) => (
+                <li key={i} className="bg-gray-800 rounded-lg p-2">
+                  <p className="font-semibold">{s.name}</p>
+                  <p className="text-sm text-gray-400">
+                    {s.start} - {s.end}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <div className="mt-4 flex justify-between text-sm text-gray-400">
             <p>To Do: {tonight.filter((t) => !t.done).length}</p>
             <p>Done: {tonight.filter((t) => t.done).length}</p>
