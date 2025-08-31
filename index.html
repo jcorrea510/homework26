@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Homework Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -21,37 +21,15 @@
     .fade{transition:opacity .22s ease,transform .22s ease}
     .small-muted{color:var(--muted);font-size:.9rem}
     .time-pill{min-width:62px}
-    .auth-overlay{position:fixed;inset:0;background:linear-gradient(0deg,rgba(2,6,23,0.6),rgba(2,6,23,0.6));display:flex;align-items:center;justify-content:center;z-index:60}
+    .break-pill{background:rgba(124,58,237,0.12);padding:.2rem .5rem;border-radius:.5rem;color:var(--accent)}
   </style>
 </head>
 <body class="min-h-screen py-8 px-6 md:px-12">
-  <!-- Auth overlay (hidden if not using Firebase or logged in) -->
-  <div id="auth-overlay" class="auth-overlay hidden">
-    <div class="bg-[#071029] p-6 rounded-2xl w-full max-w-md card">
-      <h2 class="text-xl font-bold mb-3">Sign in to save your data</h2>
-      <div class="flex flex-col gap-3">
-        <button id="google-signin" class="btn w-full py-2 rounded-md bg-white text-black">Sign in with Google</button>
-        <div class="flex items-center gap-2 small-muted">or</div>
-        <input id="email-input" type="email" placeholder="Email" class="input p-2 rounded-md" />
-        <input id="password-input" type="password" placeholder="Password" class="input p-2 rounded-md" />
-        <div class="flex gap-2">
-          <button id="email-signin" class="btn flex-1 py-2 rounded-md bg-indigo-600">Sign in</button>
-          <button id="email-signup" class="btn flex-1 py-2 rounded-md bg-gray-700">Sign up</button>
-        </div>
-        <button id="use-local" class="btn w-full py-2 rounded-md bg-gray-600">Use local (no account)</button>
-      </div>
-    </div>
-  </div>
-
   <div class="max-w-7xl mx-auto">
     <header class="mb-6 flex items-center justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text" style="background:linear-gradient(90deg,#60a5fa,#7c3aed)">Homework Tracker</h1>
-        <p class="small-muted mt-1">Weekly planner • Tonight list • Auto-schedule • Sync with Firebase</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <div id="user-info" class="small-muted"></div>
-        <button id="signout" class="btn py-2 px-3 rounded-md bg-gray-800 hidden">Sign out</button>
+        <p class="small-muted mt-1">Weekly planner • Tonight list • Auto-schedule • Local-only</p>
       </div>
     </header>
 
@@ -88,6 +66,12 @@
             <input id="custom-task-input" class="input flex-1 p-2 rounded-md text-sm" placeholder="Add custom task and press Enter" />
             <button id="add-custom" class="btn px-4 py-2 rounded-md bg-blue-600">Add</button>
           </div>
+
+          <div class="flex items-center gap-3">
+            <button id="start-break" class="btn px-3 py-2 rounded-md bg-yellow-600">Start Break</button>
+            <button id="end-break" class="btn px-3 py-2 rounded-md bg-gray-800">End Break</button>
+            <div id="break-indicator" class="small-muted">No break</div>
+          </div>
         </div>
 
         <div class="w-full md:w-96 mt-4 md:mt-0">
@@ -103,105 +87,45 @@
     </section>
   </div>
 
-  <script type="module">
-    // ---------- Firebase config ----------
-    // Paste your Firebase config object here (from Firebase console -> Project settings -> Web app)
-    // Example:
-    // const FIREBASE_CONFIG = { apiKey: '...', authDomain: '...', projectId: '...', ... };
-    const FIREBASE_CONFIG = null; // <-- REPLACE with your config object to enable cloud sync and auth
-
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-    import { getAuth, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-    import { getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-
-    // ---------- state and DOM refs ----------
+  <script>
+    // local-only version
     const classes = ['Math','English','Spanish','Comp Sci','HOTA','Physics'];
-    let state = { tasks:{}, tonight:[], weekStart: null };
-    const today = new Date();
+    let today = new Date();
+    let state = { tasks: {}, tonight: [], weekStart: null, totalBreakMs: 0 };
+    const STORAGE_KEY = 'hw-tracker-local-v1';
 
-    const q = (id)=>document.getElementById(id);
+    // break timer
+    let breakStart = null;
 
-    // ---------- persistence helpers ----------
-    const STORAGE_KEY = 'hw-tracker-v3';
-    function loadLocal(){ try{ const r=localStorage.getItem(STORAGE_KEY); if(r) state = JSON.parse(r); }catch{} if(!state.weekStart) state.weekStart = getStartOfWeek(new Date()).toISOString(); }
-    function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    function load(){ try{ const r = localStorage.getItem(STORAGE_KEY); if(r) state = JSON.parse(r); }catch{} if(!state.weekStart) state.weekStart = getStartOfWeek(new Date()).toISOString(); }
 
-    // ---------- Firebase init (optional) ----------
-    let app=null, auth=null, db=null, currentUser=null;
-    async function initFirebase(){
-      if(!FIREBASE_CONFIG) return false;
-      try{
-        app = initializeApp(FIREBASE_CONFIG);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        try{ await enableIndexedDbPersistence(db); }catch(e){ console.warn('IndexedDB persistence not enabled',e); }
-
-        onAuthStateChanged(auth, async user=>{
-          currentUser = user;
-          if(user){
-            q('auth-overlay').classList.add('hidden');
-            q('signout').classList.remove('hidden');
-            q('user-info').textContent = user.email || user.displayName || 'Signed in';
-            await loadRemote(user.uid);
-          } else {
-            // show overlay
-            q('auth-overlay').classList.remove('hidden');
-            q('signout').classList.add('hidden');
-            q('user-info').textContent = '';
-          }
-        });
-        return true;
-      }catch(err){ console.error('Firebase init failed', err); return false; }
-    }
-
-    // ---------- remote sync ----------
-    async function loadRemote(uid){
-      if(!db) return;
-      try{
-        const ref = doc(db, 'homework', uid);
-        const snap = await getDoc(ref);
-        if(snap.exists()){
-          const d = snap.data();
-          state.tasks = d.tasks || {};
-          state.tonight = d.tonight || [];
-          state.weekStart = d.weekStart || state.weekStart;
-        } else {
-          // push local to remote
-          await setDoc(ref, state);
-        }
-        saveLocal(); renderWeek(); renderTonight();
-      }catch(e){ console.error('Load remote failed', e); }
-    }
-
-    async function syncRemote(){ if(!db || !currentUser) return; try{ const ref = doc(db, 'homework', currentUser.uid); await setDoc(ref, state); }catch(e){console.warn('sync failed',e);} }
-
-    // ---------- utilities ----------
     function getStartOfWeek(date){ const d=new Date(date); const day=d.getDay(); const diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); d.setHours(0,0,0,0); return d; }
-    function keyForDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x.toDateString(); }
-    function isTomorrow(day){ const t=new Date(); t.setDate(t.getDate()+1); return new Date(day).toDateString() === t.toDateString(); }
+    function keyForDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x.toDateString(); }
+    function isTomorrowDay(dayDate){ const t=new Date(); t.setDate(t.getDate()+1); return new Date(dayDate).toDateString() === t.toDateString(); }
+    function isWeekendToday(){ const g=new Date(); return g.getDay()===6 || g.getDay()===0; }
 
-    // ---------- rendering calendar (aligned grid) ----------
+    // render week
     function renderWeek(){
-      const wk = new Date(state.weekStart || getStartOfWeek(new Date()).toISOString());
-      q('week-label').textContent = `Week of ${wk.toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
-      const grid = q('calendar-grid'); grid.innerHTML='';
+      const wk = new Date(state.weekStart);
+      document.getElementById('week-label').textContent = `Week of ${wk.toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
+      const grid = document.getElementById('calendar-grid'); grid.innerHTML = '';
       for(let i=0;i<5;i++){
         const day = new Date(wk); day.setDate(wk.getDate()+i);
-        const card = document.createElement('div'); card.className='card card-grid rounded-xl p-4 shadow-lg';
+        const card = document.createElement('div'); card.className = 'card card-grid rounded-xl p-4 shadow-lg';
         const title = document.createElement('h3'); title.className='text-lg font-semibold text-center mb-1'; title.textContent = day.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
         card.appendChild(title);
-        classes.forEach((cls, idx)=>{
+        classes.forEach(cls=>{
           const sec = document.createElement('div'); sec.className='flex flex-col';
           const lab = document.createElement('div'); lab.className='flex items-center justify-between mb-1';
-          const cname = document.createElement('div'); cname.className='font-medium text-neutral-300'; cname.textContent = cls;
-          lab.appendChild(cname);
+          const cname = document.createElement('div'); cname.className='font-medium text-neutral-300'; cname.textContent = cls; lab.appendChild(cname);
           sec.appendChild(lab);
 
           const input = document.createElement('input'); input.className='input w-full p-2 rounded-md text-sm'; input.placeholder='Add assignment...';
-          input.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.value.trim()){ addAssignment(day,cls,e.target.value.trim()); e.target.value=''; } });
+          input.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.value.trim()){ addAssignment(day, cls, e.target.value.trim()); e.target.value=''; } });
           sec.appendChild(input);
 
-          const ul = document.createElement('ul'); ul.id = `${keyForDay(day)}|${cls}`; ul.className = 'mt-2 space-y-1 min-h-[1rem]'; sec.appendChild(ul);
+          const ul = document.createElement('ul'); ul.id = `${keyForDay(day)}|${cls}`; ul.className='mt-2 space-y-1 min-h-[1rem]'; sec.appendChild(ul);
           card.appendChild(sec);
         });
         grid.appendChild(card);
@@ -209,109 +133,93 @@
       renderTasks();
     }
 
-    function addAssignment(day, cls, txt){ const k = keyForDay(day); if(!state.tasks[k]) state.tasks[k] = {}; if(!state.tasks[k][cls]) state.tasks[k][cls]=[]; state.tasks[k][cls].push({id:crypto.randomUUID(),text:txt}); saveLocal(); syncRemote(); renderTasks(); }
+    function addAssignment(day, cls, text){ const k = keyForDay(day); if(!state.tasks[k]) state.tasks[k] = {}; if(!state.tasks[k][cls]) state.tasks[k][cls] = []; state.tasks[k][cls].push({ id: crypto.randomUUID(), text });
+      // auto-add to tonight if tomorrow OR (today is weekend and day is Monday)
+      const dayDate = new Date(keyForDay(day)); if(isTomorrowDay(dayDate) || (isWeekendToday() && dayDate.getDay()===1)){
+        addToTonight(text);
+      }
+      save(); renderTasks(); }
 
-    // ---------- render tasks for each day/class - with checkbox + delete + aligned layout ----------
-    function renderTasks(){
-      Object.keys(state.tasks).forEach(dayKey=>{
-        Object.keys(state.tasks[dayKey]).forEach(cls=>{
-          const ul = document.getElementById(`${dayKey}|${cls}`); if(!ul) return; ul.innerHTML='';
-          const dayDate = new Date(dayKey);
-          const showCheckbox = !(isTomorrow(dayDate) || (today.getDay()===6 || today.getDay()===0) && dayDate.getDay()===1);
-          state.tasks[dayKey][cls].forEach(item=>{
-            const li = document.createElement('li'); li.className='flex items-center justify-between bg-gray-800 rounded-md px-2 py-1 list-item';
-            const left = document.createElement('div'); left.className='flex items-center gap-2';
-            if(showCheckbox){ const cb = document.createElement('input'); cb.type='checkbox'; cb.title='Send to Tonight'; cb.onchange = e=>{ if(e.target.checked){ addToTonight(item.text); } }; left.appendChild(cb); }
-            const span = document.createElement('span'); span.textContent = item.text; span.className='truncate'; left.appendChild(span);
-            li.appendChild(left);
-
-            const controls = document.createElement('div'); controls.className='flex gap-2 items-center';
-            if(!isTomorrow(dayDate)){
-              const btn = document.createElement('button'); btn.className='btn px-2 py-1 rounded-md bg-indigo-600 text-sm'; btn.textContent='Add to Tonight'; btn.onclick = ()=>addToTonight(item.text); controls.appendChild(btn);
-            }
-            const del = document.createElement('button'); del.className='btn px-2 py-1 rounded-md bg-red-600 text-sm'; del.textContent='Delete'; del.onclick=()=>{ state.tasks[dayKey][cls] = state.tasks[dayKey][cls].filter(x=>x.id!==item.id); saveLocal(); syncRemote(); renderTasks(); };
-            controls.appendChild(del);
-            li.appendChild(controls);
-            ul.appendChild(li);
-          });
+    function renderTasks(){ Object.keys(state.tasks).forEach(dayKey=>{ Object.keys(state.tasks[dayKey]).forEach(cls=>{
+        const ul = document.getElementById(`${dayKey}|${cls}`); if(!ul) return; ul.innerHTML='';
+        const dayDate = new Date(dayKey);
+        const showCheckbox = !(isTomorrowDay(dayDate) || (isWeekendToday() && dayDate.getDay()===1));
+        state.tasks[dayKey][cls].forEach(item=>{
+          const li = document.createElement('li'); li.className='flex items-center justify-between bg-gray-800 rounded-md px-2 py-1 list-item';
+          const left = document.createElement('div'); left.className='flex items-center gap-2';
+          if(showCheckbox){ const cb = document.createElement('input'); cb.type='checkbox'; cb.title='Send to Tonight'; cb.onchange = e=>{ if(e.target.checked){ addToTonight(item.text); e.target.disabled=true; } }; left.appendChild(cb); }
+          const span = document.createElement('span'); span.textContent = item.text; span.className='truncate'; left.appendChild(span);
+          li.appendChild(left);
+          const del = document.createElement('button'); del.className='btn px-2 py-1 rounded-md bg-red-600 text-sm'; del.textContent='Delete'; del.onclick = ()=>{ state.tasks[dayKey][cls] = state.tasks[dayKey][cls].filter(x=>x.id!==item.id); save(); renderTasks(); };
+          li.appendChild(del);
+          ul.appendChild(li);
         });
-      });
-    }
+      }); }); }
 
-    // ---------- Tonight list (drag reorder + totals) ----------
-    function addToTonight(name){ if(!name) return; if(state.tonight.find(t=>t.name===name)) return; state.tonight.push({id:crypto.randomUUID(),name,time:30,done:false}); saveLocal(); syncRemote(); renderTonight(); }
+    // Tonight list
+    function addToTonight(name){ if(!name) return; if(state.tonight.find(t=>t.name===name)) return; state.tonight.push({ id: crypto.randomUUID(), name, time:30, done:false }); save(); renderTonight(); }
 
-    function renderTonight(){
-      const list = q('tonight-list'); list.innerHTML='';
-      state.tonight.forEach((t,idx)=>{
+    function renderTonight(){ const list = document.getElementById('tonight-list'); list.innerHTML=''; state.tonight.forEach((t, idx)=>{
         const li = document.createElement('li'); li.className='flex items-center justify-between bg-gray-800 p-2 rounded-md list-item fade';
         const left = document.createElement('div'); left.className='flex items-center gap-3';
         const handle = document.createElement('div'); handle.className='text-neutral-400 cursor-grab'; handle.textContent='☰'; left.appendChild(handle);
-        const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = t.done; cb.onchange = ()=>{ t.done = cb.checked; saveLocal(); syncRemote(); renderTonight(); };
+        const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = t.done; cb.onchange = ()=>{ t.done = cb.checked; save(); renderTonight(); };
         const title = document.createElement('div'); title.className='max-w-xs truncate'; title.textContent = t.name; if(t.done) title.classList.add('line-through','text-neutral-500');
         left.appendChild(cb); left.appendChild(title);
         const right = document.createElement('div'); right.className='flex items-center gap-2';
-        const timeIn = document.createElement('input'); timeIn.type='number'; timeIn.value = t.time; timeIn.className='time-pill input p-1 rounded-md text-sm text-center'; timeIn.onchange = (e)=>{ t.time = parseInt(e.target.value)||30; saveLocal(); syncRemote(); renderTonight(); };
+        const timeIn = document.createElement('input'); timeIn.type='number'; timeIn.value=t.time; timeIn.className='time-pill input p-1 rounded-md text-sm text-center'; timeIn.onchange = e=>{ t.time = parseInt(e.target.value)||30; save(); renderTonight(); };
         const up = document.createElement('button'); up.className='btn px-2 py-1 rounded-md bg-gray-700'; up.textContent='↑'; up.onclick = ()=> moveTonight(idx, idx-1);
         const down = document.createElement('button'); down.className='btn px-2 py-1 rounded-md bg-gray-700'; down.textContent='↓'; down.onclick = ()=> moveTonight(idx, idx+1);
-        const del = document.createElement('button'); del.className='btn px-2 py-1 rounded-md bg-red-600'; del.textContent='Delete'; del.onclick = ()=>{ state.tonight.splice(idx,1); saveLocal(); syncRemote(); renderTonight(); };
+        const del = document.createElement('button'); del.className='btn px-2 py-1 rounded-md bg-red-600'; del.textContent='Delete'; del.onclick = ()=>{ state.tonight.splice(idx,1); save(); renderTonight(); };
         right.appendChild(timeIn); right.appendChild(up); right.appendChild(down); right.appendChild(del);
         li.appendChild(left); li.appendChild(right); list.appendChild(li);
       });
-
-      // sortable
-      new Sortable(list, { animation: 160, handle: '.cursor-grab, .text-neutral-400', onEnd: (evt)=>{
-        const newOrder = []; list.querySelectorAll('li').forEach(li=>{
-          const name = li.querySelector('div.max-w-xs')?.textContent || li.querySelector('span')?.textContent;
-          const task = state.tonight.find(t=>t.name===name);
-          if(task) newOrder.push(task);
-        });
-        state.tonight = newOrder; saveLocal(); syncRemote(); renderTonight();
-      }});
+      new Sortable(list, { animation: 160, handle: '.cursor-grab, .text-neutral-400', onEnd: ()=>{
+        const newOrder = []; list.querySelectorAll('li').forEach(li=>{ const name = li.querySelector('div.max-w-xs')?.textContent || li.querySelector('span')?.textContent; const task = state.tonight.find(t=>t.name===name); if(task) newOrder.push(task); }); state.tonight = newOrder; save(); renderTonight(); }
+      });
 
       // totals
       const todo = state.tonight.filter(t=>!t.done); const done = state.tonight.filter(t=>t.done);
       q('todo-count').textContent = todo.length; q('done-count').textContent = done.length;
       const todoTime = todo.reduce((s,i)=>s + (parseInt(i.time)||0),0); const doneTime = done.reduce((s,i)=>s + (parseInt(i.time)||0),0);
       q('todo-time').textContent = formatMinutes(todoTime); q('done-time').textContent = formatMinutes(doneTime);
-
-      // inline lists next to counters (show names) - optional small list
     }
 
-    function moveTonight(from,to){ if(to<0 || to>=state.tonight.length) return; const [it] = state.tonight.splice(from,1); state.tonight.splice(to,0,it); saveLocal(); syncRemote(); renderTonight(); }
+    function moveTonight(from,to){ if(to<0||to>=state.tonight.length) return; const [it] = state.tonight.splice(from,1); state.tonight.splice(to,0,it); save(); renderTonight(); }
 
-    function formatMinutes(mins){ if(mins<60) return `${mins}m`; const h=Math.floor(mins/60); const m=mins%60; return `${h}h ${m}m`; }
+    function formatMinutes(m){ if(m<60) return `${m}m`; const h=Math.floor(m/60); const mm=m%60; return `${h}h ${mm}m`; }
 
-    // ---------- schedule ----------
-    function generateSchedule(){ let start = q('schedule-start-time-input').value; if(!start){ const now = new Date(); start = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`; }
+    // schedule with break offset
+    function generateSchedule(){ let start = document.getElementById('schedule-start-time-input').value; if(!start){ const now = new Date(); start = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`; }
       const [h,m] = start.split(':').map(Number); let cur = new Date(); cur.setHours(h,m,0,0);
-      const list = q('schedule-list'); list.innerHTML=''; state.tonight.filter(t=>!t.done).forEach(t=>{ const end = new Date(cur.getTime()+t.time*60000); const li = document.createElement('li'); li.className='bg-gray-800 p-3 rounded-md fade'; li.innerHTML = `<div class="font-semibold">${escapeHtml(t.name)}</div><div class='text-sm text-neutral-400'>${cur.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`; list.appendChild(li); cur = end; }); }
+      // apply total break time as offset
+      cur = new Date(cur.getTime() + (state.totalBreakMs||0));
+      const list = document.getElementById('schedule-list'); list.innerHTML = '';
+      state.tonight.filter(t=>!t.done).forEach(t=>{ const end = new Date(cur.getTime() + t.time*60000); const li = document.createElement('li'); li.className='bg-gray-800 p-3 rounded-md fade'; li.innerHTML = `<div class="font-semibold">${escapeHtml(t.name)}</div><div class='text-sm text-neutral-400'>${cur.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`; list.appendChild(li); cur = end; }); }
+
+    // break controls
+    function startBreak(){ if(breakStart) return; breakStart = Date.now(); q('break-indicator').textContent = 'Break: 0m'; q('start-break').classList.add('opacity-80');
+      // live timer
+      breakTimerInterval = setInterval(()=>{ const diff = Date.now()-breakStart; q('break-indicator').textContent = `Break: ${formatMinutes(Math.floor(diff/60000))}`; },1000*10);
+    }
+    function endBreak(){ if(!breakStart) return; const diff = Date.now()-breakStart; state.totalBreakMs = (state.totalBreakMs||0) + diff; breakStart = null; clearInterval(breakTimerInterval); q('break-indicator').textContent = `Total break: ${formatMinutes(Math.floor((state.totalBreakMs||0)/60000))}`; save(); }
 
     function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function q(id){ return document.getElementById(id); }
 
-    // ---------- events ----------
-    q('prev-week').addEventListener('click', ()=>{ const wk = new Date(state.weekStart||getStartOfWeek(new Date()).toISOString()); wk.setDate(wk.getDate()-7); state.weekStart = wk.toISOString(); saveLocal(); syncRemote(); renderWeek(); });
-    q('next-week').addEventListener('click', ()=>{ const wk = new Date(state.weekStart||getStartOfWeek(new Date()).toISOString()); wk.setDate(wk.getDate()+7); state.weekStart = wk.toISOString(); saveLocal(); syncRemote(); renderWeek(); });
-    q('today-btn').addEventListener('click', ()=>{ state.weekStart = getStartOfWeek(new Date()).toISOString(); saveLocal(); syncRemote(); renderWeek(); });
-    q('reset-storage').addEventListener('click', ()=>{ if(confirm('Clear local saved data?')){ localStorage.removeItem(STORAGE_KEY); state={tasks:{},tonight:[],weekStart:getStartOfWeek(new Date()).toISOString()}; renderWeek(); renderTonight(); } });
-    q('add-custom').addEventListener('click', ()=>{ const v = q('custom-task-input').value.trim(); if(!v) return; addToTonight(v); q('custom-task-input').value=''; });
+    // events
+    q('prev-week').addEventListener('click', ()=>{ const wk=new Date(state.weekStart); wk.setDate(wk.getDate()-7); state.weekStart = wk.toISOString(); save(); renderWeek(); });
+    q('next-week').addEventListener('click', ()=>{ const wk=new Date(state.weekStart); wk.setDate(wk.getDate()+7); state.weekStart = wk.toISOString(); save(); renderWeek(); });
+    q('today-btn').addEventListener('click', ()=>{ state.weekStart = getStartOfWeek(new Date()).toISOString(); save(); renderWeek(); });
+    q('reset-storage').addEventListener('click', ()=>{ if(confirm('Clear local saved data?')){ localStorage.removeItem(STORAGE_KEY); state = { tasks:{}, tonight:[], weekStart:getStartOfWeek(new Date()).toISOString(), totalBreakMs:0 }; renderWeek(); renderTonight(); } });
+    q('add-custom').addEventListener('click', ()=>{ const v=q('custom-task-input').value.trim(); if(!v) return; addToTonight(v); q('custom-task-input').value=''; });
     q('custom-task-input').addEventListener('keydown', e=>{ if(e.key==='Enter'){ const v=e.target.value.trim(); if(v){ addToTonight(v); e.target.value=''; } } });
     q('current-time').addEventListener('click', ()=>{ q('schedule-start-time-input').value = new Date().toTimeString().slice(0,5); });
     q('generate-schedule').addEventListener('click', generateSchedule);
+    q('start-break').addEventListener('click', startBreak); q('end-break').addEventListener('click', endBreak);
 
-    // ---------- auth handlers (if firebase enabled) ----------
-    q('use-local').addEventListener('click', ()=>{ q('auth-overlay').classList.add('hidden'); q('signout').classList.add('hidden'); });
-    q('signout').addEventListener('click', async ()=>{ if(!auth){ q('auth-overlay').classList.remove('hidden'); return; } await signOut(auth); state = {tasks:state.tasks||{}, tonight:state.tonight||[], weekStart:state.weekStart||getStartOfWeek(new Date()).toISOString() }; saveLocal(); renderWeek(); renderTonight(); });
-
-    // firebase auth buttons
-    q('google-signin').addEventListener('click', async ()=>{ try{ const provider = new GoogleAuthProvider(); await signInWithPopup(auth, provider); }catch(e){ alert('Sign in failed'); console.error(e); } });
-    q('email-signup').addEventListener('click', async ()=>{ try{ const em = q('email-input').value; const pw = q('password-input').value; await createUserWithEmailAndPassword(auth, em, pw); }catch(e){ alert('Sign up failed'); console.error(e); } });
-    q('email-signin').addEventListener('click', async ()=>{ try{ const em = q('email-input').value; const pw = q('password-input').value; await signInWithEmailAndPassword(auth, em, pw); }catch(e){ alert('Sign in failed'); console.error(e); } });
-
-    // ---------- init ----------
-    loadLocal(); if(FIREBASE_CONFIG){ const ok = await initFirebase(); if(!ok) q('auth-overlay').classList.add('hidden'); } else { q('auth-overlay').classList.add('hidden'); }
-    renderWeek(); renderTonight();
-
+    // init
+    load(); renderWeek(); renderTonight();
   </script>
 </body>
 </html>
