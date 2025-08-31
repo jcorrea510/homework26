@@ -6,57 +6,65 @@
     <title>Homework Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Client-only version (no Firebase). Data is saved to localStorage.
+        // Dark-mode UI handled by Tailwind CDN already in the page.
 
-        // IMPORTANT: Log level for debugging Firestore. Can be removed in production.
-        setLogLevel('debug');
-        
-        // Use global variables provided by the environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const __initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // ---------- Utilities ----------
+        const STORAGE_KEY = 'homeworkTrackerData.v1';
+        const uuid = () => 'id-' + Math.random().toString(16).slice(2) + Date.now().toString(16);
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        let userId = null;
-        let today = new Date();
         const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const classes = ['Math', 'English', 'Spanish', 'Comp Sci', 'HOTA', 'Physics'];
+
+        let today = new Date();
+
         const homeworkData = {
-            tasks: {},
-            tonight: [],
-            schedule: [],
-            summary: {
-                todo: 0,
-                done: 0
-            }
+            tasks: {},     // shape: { [day]: { [className]: string[] } }
+            tonight: [],   // array of { id, name, time, isDone }
+            summary: { todo: 0, done: 0 }
         };
 
+        // Load/save helpers
+        const saveData = () => {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(homeworkData)); } catch {}
+        };
+        const loadData = () => {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const loaded = JSON.parse(raw);
+                    // shallow merge, keep expected keys
+                    if (loaded && typeof loaded === 'object') {
+                        homeworkData.tasks = loaded.tasks || {};
+                        homeworkData.tonight = Array.isArray(loaded.tonight) ? loaded.tonight : [];
+                        homeworkData.summary = loaded.summary || { todo: 0, done: 0 };
+                    }
+                }
+            } catch {}
+        };
+
+        // Determine if an assignment added under `day` should also go to Tonight
         const tomorrowDueTonight = (day) => {
             const currentDayIndex = today.getDay();
             const tomorrowIndex = (currentDayIndex + 1) % 7;
-            const tomorrowIsMondayAndItsWeekend = (daysOfWeek[currentDayIndex] === 'Saturday' || daysOfWeek[currentDayIndex] === 'Sunday') && day === 'Monday';
             const dayIsTomorrow = daysOfWeek.indexOf(day) === tomorrowIndex;
-            return dayIsTomorrow || tomorrowIsMondayAndItsWeekend;
+            const weekend = daysOfWeek[currentDayIndex] === 'Saturday' || daysOfWeek[currentDayIndex] === 'Sunday';
+            const mondayCase = weekend && day === 'Monday';
+            return dayIsTomorrow || mondayCase;
         };
 
+        // ---------- Rendering ----------
         const renderTasks = (day, className) => {
-            const taskList = document.querySelector(`#${day}-${className}-list`);
+            const taskList = document.querySelector(`#${CSS.escape(day)}-${CSS.escape(className)}-list`);
             if (!taskList) return;
-
             taskList.innerHTML = '';
-            const tasks = homeworkData.tasks[day]?.[className] || [];
-            tasks.forEach(task => {
+            const items = homeworkData.tasks?.[day]?.[className] || [];
+            items.forEach(task => {
                 const li = document.createElement('li');
                 li.className = 'flex items-center justify-between p-2 rounded-lg bg-gray-800 my-1';
                 li.innerHTML = `
-                    <span>${task}</span>
-                    <button onclick="addToTonight('${day}', '${className}', '${task}')" class="text-xs px-2 py-1 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
+                    <span class="pr-2 break-words">${task}</span>
+                    <button onclick="addToTonight('${day.replace(/'/g, "\\'")}', '${className.replace(/'/g, "\\'")}', '${task.replace(/'/g, "\\'")}')" class="text-xs px-2 py-1 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
                         Add to Tonight
                     </button>
                 `;
@@ -67,7 +75,7 @@
         const renderTonightList = () => {
             const tonightList = document.getElementById('tonight-list');
             tonightList.innerHTML = '';
-            homeworkData.tonight.forEach((task, index) => {
+            homeworkData.tonight.forEach(task => {
                 const li = document.createElement('li');
                 li.className = 'flex flex-col md:flex-row items-start md:items-center justify-between p-3 rounded-lg bg-gray-800 my-2 shadow-sm';
                 li.innerHTML = `
@@ -77,7 +85,7 @@
                     </div>
                     <div class="flex items-center text-sm text-gray-400">
                         <span class="mr-2">Time:</span>
-                        <input type="number" onchange="updateTaskTime('${task.id}', this.value)" value="${task.time}" class="w-20 bg-gray-700 text-white p-1 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="number" min="1" onchange="updateTaskTime('${task.id}', this.value)" value="${task.time}" class="w-20 bg-gray-700 text-white p-1 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <span class="ml-1">mins</span>
                     </div>
                 `;
@@ -88,192 +96,120 @@
         };
 
         const updateSummary = () => {
-            const todoCount = homeworkData.tonight.filter(task => !task.isDone).length;
-            const doneCount = homeworkData.tonight.filter(task => task.isDone).length;
+            const todoCount = homeworkData.tonight.filter(t => !t.isDone).length;
+            const doneCount = homeworkData.tonight.filter(t => t.isDone).length;
             document.getElementById('todo-count').textContent = todoCount;
             document.getElementById('done-count').textContent = doneCount;
+            homeworkData.summary = { todo: todoCount, done: doneCount };
         };
 
-        const updateTaskStatus = (id) => {
-            const task = homeworkData.tonight.find(t => t.id === id);
-            if (task) {
-                task.isDone = !task.isDone;
-                renderTonightList();
-            }
-        };
-
-        const updateTaskTime = (id, time) => {
-            const task = homeworkData.tonight.find(t => t.id === id);
-            if (task) {
-                task.time = parseInt(time) || 30;
-                saveData();
-            }
-        };
-
+        // ---------- Mutations exposed to window (used by inline handlers) ----------
         window.addToTonight = (day, className, task) => {
-            const existingTask = homeworkData.tonight.find(t => t.name === task);
-            if (existingTask) return; // Prevent duplicates
-
-            homeworkData.tonight.push({
-                id: crypto.randomUUID(),
-                name: task,
-                time: 30,
-                isDone: false
-            });
+            if (!task) return;
+            const exists = homeworkData.tonight.some(t => t.name === task);
+            if (exists) return;
+            homeworkData.tonight.push({ id: uuid(), name: task, time: 30, isDone: false });
             renderTonightList();
         };
 
         window.addTask = (event, day, className) => {
-            if (event.key === 'Enter') {
-                const input = event.target;
-                const task = input.value.trim();
-                if (task === '') return;
-
-                if (!homeworkData.tasks[day]) homeworkData.tasks[day] = {};
-                if (!homeworkData.tasks[day][className]) homeworkData.tasks[day][className] = [];
-
-                homeworkData.tasks[day][className].push(task);
-                input.value = '';
-
-                renderTasks(day, className);
-                saveData();
-
-                if (tomorrowDueTonight(day)) {
-                    addToTonight(day, className, task);
-                }
+            if (event.key !== 'Enter') return;
+            const input = event.target;
+            const task = input.value.trim();
+            if (!task) return;
+            if (!homeworkData.tasks[day]) homeworkData.tasks[day] = {};
+            if (!homeworkData.tasks[day][className]) homeworkData.tasks[day][className] = [];
+            homeworkData.tasks[day][className].push(task);
+            input.value = '';
+            renderTasks(day, className);
+            saveData();
+            if (tomorrowDueTonight(day)) {
+                window.addToTonight(day, className, task);
             }
         };
-        
+
         window.addCustomTask = () => {
             const input = document.getElementById('custom-task-input');
             const task = input.value.trim();
-            if (task === '') return;
-
-            addToTonight('Tonight', 'Custom', task);
+            if (!task) return;
+            window.addToTonight('Tonight', 'Custom', task);
             input.value = '';
         };
-        
+
+        window.updateTaskStatus = (id) => {
+            const t = homeworkData.tonight.find(x => x.id === id);
+            if (!t) return;
+            t.isDone = !t.isDone;
+            renderTonightList();
+        };
+
+        window.updateTaskTime = (id, time) => {
+            const t = homeworkData.tonight.find(x => x.id === id);
+            if (!t) return;
+            const val = parseInt(time, 10);
+            t.time = Number.isFinite(val) && val > 0 ? val : 30;
+            saveData();
+        };
+
         window.generateSchedule = () => {
             const startTimeInput = document.getElementById('schedule-start-time-input');
             let startTime = startTimeInput.value;
-            
-            if (startTime === '') {
+            if (!startTime) {
                 const now = new Date();
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                startTime = `${hours}:${minutes}`;
+                startTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
             }
-
             const scheduleList = document.getElementById('schedule-list');
             scheduleList.innerHTML = '';
-            
-            let currentTime = new Date();
-            const [startHour, startMinute] = startTime.split(':').map(Number);
-            currentTime.setHours(startHour, startMinute, 0, 0);
 
-            homeworkData.tonight.sort((a, b) => a.isDone - b.isDone).forEach(task => {
-                const taskDuration = task.time;
-                const endTime = new Date(currentTime.getTime() + taskDuration * 60000);
+            let current = new Date();
+            const [h, m] = startTime.split(':').map(Number);
+            current.setHours(h, m, 0, 0);
 
+            // Incomplete tasks first
+            const ordered = [...homeworkData.tonight].sort((a,b) => Number(a.isDone) - Number(b.isDone));
+            ordered.forEach(task => {
+                const end = new Date(current.getTime() + task.time * 60000);
                 const li = document.createElement('li');
                 li.className = 'p-2 rounded-lg bg-gray-800 my-1';
                 li.innerHTML = `
                     <p class="font-semibold">${task.name}</p>
-                    <p class="text-sm text-gray-400">
-                        ${currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                        ${endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <p class="text-sm text-gray-400">${current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 `;
                 scheduleList.appendChild(li);
-
-                currentTime = endTime;
+                current = end;
             });
         };
 
         const renderApp = () => {
             const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-            const calendarGrid = document.getElementById('calendar-grid');
-            calendarGrid.innerHTML = '';
+            const grid = document.getElementById('calendar-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
             weekdays.forEach(day => {
                 const dayContainer = document.createElement('div');
                 dayContainer.className = 'p-4 bg-gray-800 rounded-xl shadow-lg border border-gray-700';
                 dayContainer.innerHTML = `<h2 class="text-xl font-bold mb-4 text-center">${day}</h2>`;
-                
                 classes.forEach(className => {
                     const classSection = document.createElement('div');
                     classSection.className = 'my-4 p-3 bg-gray-900 rounded-lg border border-gray-700';
                     classSection.innerHTML = `
                         <h3 class="font-semibold text-lg mb-2 text-gray-300">${className}</h3>
                         <input type="text" onkeydown="addTask(event, '${day}', '${className}')" placeholder="Add an assignment..." class="w-full bg-gray-700 p-2 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <ul id="${day}-${className}-list" class="mt-2 text-sm text-white"></ul>
+                        <ul id="${day}-${className}-list" class="mt-2 text-sm text-white list-disc list-inside"></ul>
                     `;
                     dayContainer.appendChild(classSection);
                 });
-                calendarGrid.appendChild(dayContainer);
+                grid.appendChild(dayContainer);
             });
-            
-            // Render existing tasks from Firestore
-            weekdays.forEach(day => {
-                classes.forEach(className => {
-                    renderTasks(day, className);
-                });
-            });
+            // Render existing tasks
+            weekdays.forEach(day => classes.forEach(cls => renderTasks(day, cls)));
             renderTonightList();
         };
 
-        const saveData = async () => {
-            if (!userId) return;
-            const docRef = doc(db, 'artifacts', appId, 'users', userId, 'homework', 'user_data');
-            try {
-                await setDoc(docRef, homeworkData);
-            } catch (e) {
-                console.error("Error writing document: ", e);
-            }
-        };
-
-        const loadData = async () => {
-            if (!userId) return;
-            const docRef = doc(db, 'artifacts', appId, 'users', userId, 'homework', 'user_data');
-            try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const loadedData = docSnap.data();
-                    Object.assign(homeworkData, loadedData);
-                }
-            } catch (e) {
-                console.error("Error loading document: ", e);
-            }
-        };
-
-        // Firebase Auth listener
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-                await loadData();
-                renderApp();
-            } else {
-                console.log("No user signed in. Using anonymous sign-in.");
-                try {
-                    await signInAnonymously(auth);
-                } catch (error) {
-                    console.error("Anonymous sign-in failed: ", error);
-                }
-            }
-        });
-
-        // Initialize Firebase on window load
-        window.onload = async () => {
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
             renderApp();
-            try {
-                if (__initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth failed:", error);
-            }
-        };
+        });
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
