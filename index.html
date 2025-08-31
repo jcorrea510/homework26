@@ -1,288 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Homework Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-        // Client-only version (no Firebase). Data is saved to localStorage.
-        // Dark-mode UI handled by Tailwind CDN already in the page.
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Reorder } from "framer-motion";
 
-        // ---------- Utilities ----------
-        const STORAGE_KEY = 'homeworkTrackerData.v1';
-        const uuid = () => 'id-' + Math.random().toString(16).slice(2) + Date.now().toString(16);
+const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
 
-        const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const classes = ['Math', 'English', 'Spanish', 'Comp Sci', 'HOTA', 'Physics'];
+const getStartOfWeek = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
+  return new Date(d.setDate(diff));
+};
 
-        let today = new Date();
+export default function HomeworkTracker() {
+  const [today] = useState(new Date());
+  const [weekStart, setWeekStart] = useState(getStartOfWeek(new Date()));
+  const [tasks, setTasks] = useState({}); // { dateString: { className: [tasks] } }
+  const [tonight, setTonight] = useState([]);
 
-        const homeworkData = {
-            tasks: {},     // shape: { [day]: { [className]: string[] } }
-            tonight: [],   // array of { id, name, time, isDone }
-            summary: { todo: 0, done: 0 }
-        };
+  const weekDays = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
 
-        // Load/save helpers
-        const saveData = () => {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(homeworkData)); } catch {}
-        };
-        const loadData = () => {
-            try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                if (raw) {
-                    const loaded = JSON.parse(raw);
-                    // shallow merge, keep expected keys
-                    if (loaded && typeof loaded === 'object') {
-                        homeworkData.tasks = loaded.tasks || {};
-                        homeworkData.tonight = Array.isArray(loaded.tonight) ? loaded.tonight : [];
-                        homeworkData.summary = loaded.summary || { todo: 0, done: 0 };
-                    }
-                }
-            } catch {}
-        };
+  const addTask = (day, className, name) => {
+    setTasks((prev) => {
+      const key = day.toDateString();
+      const updated = { ...prev };
+      if (!updated[key]) updated[key] = {};
+      if (!updated[key][className]) updated[key][className] = [];
+      updated[key][className] = [...updated[key][className], name];
+      return updated;
+    });
+  };
 
-        // Determine if an assignment added under `day` should also go to Tonight
-        const tomorrowDueTonight = (day) => {
-            const currentDayIndex = today.getDay();
-            const tomorrowIndex = (currentDayIndex + 1) % 7;
-            const dayIsTomorrow = daysOfWeek.indexOf(day) === tomorrowIndex;
-            const weekend = daysOfWeek[currentDayIndex] === 'Saturday' || daysOfWeek[currentDayIndex] === 'Sunday';
-            const mondayCase = weekend && day === 'Monday';
-            return dayIsTomorrow || mondayCase;
-        };
+  const addTonight = (name) => {
+    if (tonight.find((t) => t.name === name)) return;
+    setTonight([...tonight, { id: crypto.randomUUID(), name, time: 30, done: false }]);
+  };
 
-        // ---------- Rendering ----------
-        const renderTasks = (day, className) => {
-            const taskList = document.querySelector(`#${CSS.escape(day)}-${CSS.escape(className)}-list`);
-            if (!taskList) return;
-            taskList.innerHTML = '';
-            const items = homeworkData.tasks?.[day]?.[className] || [];
-            items.forEach(task => {
-                const li = document.createElement('li');
-                li.className = 'flex items-center justify-between p-2 rounded-lg bg-gray-800 my-1';
-                li.innerHTML = `
-                    <span class="pr-2 break-words">${task}</span>
-                    <button onclick="addToTonight('${day.replace(/'/g, "\\'")}', '${className.replace(/'/g, "\\'")}', '${task.replace(/'/g, "\\'")}')" class="text-xs px-2 py-1 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                        Add to Tonight
-                    </button>
-                `;
-                taskList.appendChild(li);
-            });
-        };
+  const updateTask = (id, updates) => {
+    setTonight((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+  };
 
-        const renderTonightList = () => {
-            const tonightList = document.getElementById('tonight-list');
-            tonightList.innerHTML = '';
-            homeworkData.tonight.forEach(task => {
-                const li = document.createElement('li');
-                li.className = 'flex flex-col md:flex-row items-start md:items-center justify-between p-3 rounded-lg bg-gray-800 my-2 shadow-sm';
-                li.innerHTML = `
-                    <div class="flex items-center flex-1 mb-2 md:mb-0">
-                        <input type="checkbox" onchange="updateTaskStatus('${task.id}')" ${task.isDone ? 'checked' : ''} class="mr-3 w-5 h-5 accent-blue-500">
-                        <span class="text-lg flex-1 ${task.isDone ? 'line-through text-gray-500' : ''}">${task.name}</span>
-                    </div>
-                    <div class="flex items-center text-sm text-gray-400">
-                        <span class="mr-2">Time:</span>
-                        <input type="number" min="1" onchange="updateTaskTime('${task.id}', this.value)" value="${task.time}" class="w-20 bg-gray-700 text-white p-1 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <span class="ml-1">mins</span>
-                    </div>
-                `;
-                tonightList.appendChild(li);
-            });
-            updateSummary();
-            saveData();
-        };
+  return (
+    <div className="min-h-screen bg-gray-950 text-white p-6">
+      <header className="text-center mb-8">
+        <h1 className="text-5xl font-extrabold text-blue-400">Homework Tracker</h1>
+        <p className="text-gray-400">Organize tasks, plan tonight, and auto-schedule.</p>
+      </header>
 
-        const updateSummary = () => {
-            const todoCount = homeworkData.tonight.filter(t => !t.isDone).length;
-            const doneCount = homeworkData.tonight.filter(t => t.isDone).length;
-            document.getElementById('todo-count').textContent = todoCount;
-            document.getElementById('done-count').textContent = doneCount;
-            homeworkData.summary = { todo: todoCount, done: doneCount };
-        };
+      {/* Week Navigation */}
+      <div className="flex justify-between items-center mb-6">
+        <Button
+          variant="outline"
+          onClick={() => setWeekStart((prev) => new Date(prev.setDate(prev.getDate() - 7)))}
+          className="rounded-full"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <h2 className="text-2xl font-bold">
+          Week of {weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+        </h2>
+        <Button
+          variant="outline"
+          onClick={() => setWeekStart((prev) => new Date(prev.setDate(prev.getDate() + 7)))}
+          className="rounded-full"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </Button>
+      </div>
 
-        // ---------- Mutations exposed to window (used by inline handlers) ----------
-        window.addToTonight = (day, className, task) => {
-            if (!task) return;
-            const exists = homeworkData.tonight.some(t => t.name === task);
-            if (exists) return;
-            homeworkData.tonight.push({ id: uuid(), name: task, time: 30, isDone: false });
-            renderTonightList();
-        };
-
-        window.addTask = (event, day, className) => {
-            if (event.key !== 'Enter') return;
-            const input = event.target;
-            const task = input.value.trim();
-            if (!task) return;
-            if (!homeworkData.tasks[day]) homeworkData.tasks[day] = {};
-            if (!homeworkData.tasks[day][className]) homeworkData.tasks[day][className] = [];
-            homeworkData.tasks[day][className].push(task);
-            input.value = '';
-            renderTasks(day, className);
-            saveData();
-            if (tomorrowDueTonight(day)) {
-                window.addToTonight(day, className, task);
-            }
-        };
-
-        window.addCustomTask = () => {
-            const input = document.getElementById('custom-task-input');
-            const task = input.value.trim();
-            if (!task) return;
-            window.addToTonight('Tonight', 'Custom', task);
-            input.value = '';
-        };
-
-        window.updateTaskStatus = (id) => {
-            const t = homeworkData.tonight.find(x => x.id === id);
-            if (!t) return;
-            t.isDone = !t.isDone;
-            renderTonightList();
-        };
-
-        window.updateTaskTime = (id, time) => {
-            const t = homeworkData.tonight.find(x => x.id === id);
-            if (!t) return;
-            const val = parseInt(time, 10);
-            t.time = Number.isFinite(val) && val > 0 ? val : 30;
-            saveData();
-        };
-
-        window.generateSchedule = () => {
-            const startTimeInput = document.getElementById('schedule-start-time-input');
-            let startTime = startTimeInput.value;
-            if (!startTime) {
-                const now = new Date();
-                startTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-            }
-            const scheduleList = document.getElementById('schedule-list');
-            scheduleList.innerHTML = '';
-
-            let current = new Date();
-            const [h, m] = startTime.split(':').map(Number);
-            current.setHours(h, m, 0, 0);
-
-            // Incomplete tasks first
-            const ordered = [...homeworkData.tonight].sort((a,b) => Number(a.isDone) - Number(b.isDone));
-            ordered.forEach(task => {
-                const end = new Date(current.getTime() + task.time * 60000);
-                const li = document.createElement('li');
-                li.className = 'p-2 rounded-lg bg-gray-800 my-1';
-                li.innerHTML = `
-                    <p class="font-semibold">${task.name}</p>
-                    <p class="text-sm text-gray-400">${current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                `;
-                scheduleList.appendChild(li);
-                current = end;
-            });
-        };
-
-        const renderApp = () => {
-            const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-            const grid = document.getElementById('calendar-grid');
-            if (!grid) return;
-            grid.innerHTML = '';
-            weekdays.forEach(day => {
-                const dayContainer = document.createElement('div');
-                dayContainer.className = 'p-4 bg-gray-800 rounded-xl shadow-lg border border-gray-700';
-                dayContainer.innerHTML = `<h2 class="text-xl font-bold mb-4 text-center">${day}</h2>`;
-                classes.forEach(className => {
-                    const classSection = document.createElement('div');
-                    classSection.className = 'my-4 p-3 bg-gray-900 rounded-lg border border-gray-700';
-                    classSection.innerHTML = `
-                        <h3 class="font-semibold text-lg mb-2 text-gray-300">${className}</h3>
-                        <input type="text" onkeydown="addTask(event, '${day}', '${className}')" placeholder="Add an assignment..." class="w-full bg-gray-700 p-2 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <ul id="${day}-${className}-list" class="mt-2 text-sm text-white list-disc list-inside"></ul>
-                    `;
-                    dayContainer.appendChild(classSection);
-                });
-                grid.appendChild(dayContainer);
-            });
-            // Render existing tasks
-            weekdays.forEach(day => classes.forEach(cls => renderTasks(day, cls)));
-            renderTonightList();
-        };
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadData();
-            renderApp();
-        });
-    </script>
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-    </style>
-</head>
-<body class="bg-gray-950 text-white min-h-screen p-8 md:p-12">
-    <div class="max-w-7xl mx-auto">
-        <header class="text-center mb-10">
-            <h1 class="text-4xl md:text-5xl font-extrabold text-blue-500 tracking-tight">Homework Tracker</h1>
-            <p class="text-gray-400 mt-2">Stay on top of your assignments and schedule.</p>
-        </header>
-
-        <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Calendar Section -->
-            <div class="lg:col-span-2">
-                <h2 class="text-2xl font-bold mb-4 text-center text-gray-200">Weekly Assignments</h2>
-                <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6">
-                    <!-- Calendar content will be rendered here by JS -->
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6">
+        {weekDays.map((day) => (
+          <Card key={day.toDateString()} className="bg-gray-900 border-gray-800">
+            <CardContent className="p-4">
+              <h3 className="text-xl font-semibold mb-2 text-center">
+                {day.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+              </h3>
+              {classes.map((cls) => (
+                <div key={cls} className="mb-3">
+                  <p className="font-medium text-gray-300">{cls}</p>
+                  <Input
+                    placeholder="Add assignment..."
+                    className="mt-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                        addTask(day, cls, e.currentTarget.value.trim());
+                        if (
+                          day.getDate() === today.getDate() + 1 ||
+                          (today.getDay() === 6 || today.getDay() === 0)
+                        ) {
+                          addTonight(e.currentTarget.value.trim());
+                        }
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                  />
+                  <ul className="mt-2 space-y-1">
+                    {(tasks[day.toDateString()]?.[cls] || []).map((t, i) => (
+                      <li key={i} className="flex justify-between bg-gray-800 rounded-lg px-2 py-1 text-sm">
+                        {t}
+                        <Button
+                          size="xs"
+                          className="ml-2"
+                          onClick={() => addTonight(t)}
+                        >
+                          Tonight
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-            </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-            <!-- Tonight & Schedule Section -->
-            <div class="lg:col-span-1 p-6 bg-gray-900 rounded-3xl shadow-xl border border-gray-800">
-                <h2 class="text-2xl font-bold mb-4 text-center text-gray-200">Tonight</h2>
-                <div class="p-4 bg-gray-800 rounded-2xl border border-gray-700 mb-6">
-                    <h3 class="text-lg font-semibold mb-2 text-gray-300">Add a Custom Task</h3>
-                    <div class="flex">
-                        <input type="text" id="custom-task-input" placeholder="e.g., Study for test" class="flex-1 p-2 bg-gray-700 text-white rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button onclick="addCustomTask()" class="ml-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                            Add
-                        </button>
-                    </div>
+      {/* Tonight Section */}
+      <Card className="bg-gray-900 border-gray-800 mt-10">
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-bold mb-4 text-center">Tonight</h2>
+          <Reorder.Group axis="y" values={tonight} onReorder={setTonight}>
+            {tonight.map((t) => (
+              <Reorder.Item
+                key={t.id}
+                value={t}
+                className="flex items-center justify-between bg-gray-800 p-3 mb-2 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <GripVertical className="w-4 h-4 text-gray-500" />
+                  <input
+                    type="checkbox"
+                    checked={t.done}
+                    onChange={() => updateTask(t.id, { done: !t.done })}
+                    className="accent-blue-500 w-5 h-5"
+                  />
+                  <span className={`text-lg ${t.done ? "line-through text-gray-500" : ""}`}>
+                    {t.name}
+                  </span>
                 </div>
-
-                <!-- Tonight List -->
-                <ul id="tonight-list" class="mb-6">
-                    <!-- Tasks will be rendered here -->
-                </ul>
-
-                <!-- Schedule Generation -->
-                <div class="p-4 bg-gray-800 rounded-2xl border border-gray-700 mb-6">
-                    <h3 class="text-lg font-semibold mb-2 text-gray-300">Generate Schedule</h3>
-                    <div class="flex items-center space-x-2 mb-2">
-                        <label for="schedule-start-time-input" class="text-sm">Start Time:</label>
-                        <input type="time" id="schedule-start-time-input" class="p-1 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button onclick="document.getElementById('schedule-start-time-input').value = new Date().toTimeString().slice(0, 5)" class="text-xs px-3 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition-colors duration-200">
-                            Current
-                        </button>
-                    </div>
-                    <button onclick="generateSchedule()" class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">
-                        Create My Schedule
-                    </button>
+                <div className="flex items-center gap-2 text-sm">
+                  <span>⏱</span>
+                  <Input
+                    type="number"
+                    value={t.time}
+                    onChange={(e) => updateTask(t.id, { time: parseInt(e.target.value) || 30 })}
+                    className="w-20"
+                  />
+                  <span>mins</span>
                 </div>
-
-                <!-- Schedule Display -->
-                <div class="p-4 bg-gray-800 rounded-2xl border border-gray-700">
-                    <h3 class="text-lg font-semibold mb-2 text-gray-300">My Schedule</h3>
-                    <ul id="schedule-list" class="text-white">
-                        <!-- Schedule items will be rendered here -->
-                    </ul>
-                </div>
-
-                <!-- Summary -->
-                <div class="mt-6 p-4 bg-gray-800 rounded-2xl border border-gray-700">
-                    <h3 class="text-lg font-semibold mb-2 text-gray-300">Summary</h3>
-                    <div class="flex justify-between items-center text-sm">
-                        <p class="text-red-400">To Do: <span id="todo-count" class="font-bold">0</span></p>
-                        <p class="text-green-400">Done: <span id="done-count" class="font-bold">0</span></p>
-                    </div>
-                </div>
-            </div>
-        </div>
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
+          <div className="mt-4 flex justify-between text-sm text-gray-400">
+            <p>To Do: {tonight.filter((t) => !t.done).length}</p>
+            <p>Done: {tonight.filter((t) => t.done).length}</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
-</body>
-</html>
+  );
+}
