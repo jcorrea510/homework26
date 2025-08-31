@@ -1,155 +1,236 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Homework Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    .fade-enter { opacity: 0; transform: translateY(10px); }
-    .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
-    .fade-exit { opacity: 1; transform: translateY(0); }
-    .fade-exit-active { opacity: 0; transform: translateY(-10px); transition: all 0.3s ease; }
+    :root{
+      --bg:#060814; --card:#0f1724; --muted:#9ca3af; --accent:#7c3aed;
+    }
+    html,body{height:100%}
+    body{background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#fff}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.04));border:1px solid rgba(255,255,255,0.04);backdrop-filter:blur(4px)}
+    .btn{transition:transform .12s cubic-bezier(.2,.9,.2,1),box-shadow .12s ease;transform-origin:center}
+    .btn:hover{transform:translateY(-4px) scale(1.03);box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    .input{background:#0b1220;border:1px solid rgba(255,255,255,0.04)}
+    .card-grid{display:grid;grid-template-rows:auto repeat(6, minmax(3.6rem, auto));gap:.6rem}
+    .list-item{transition:transform .18s cubic-bezier(.2,.9,.2,1),opacity .18s ease}
+    .fade{transition:opacity .22s ease,transform .22s ease}
+    .small-muted{color:var(--muted);font-size:.9rem}
+    .time-pill{min-width:62px}
+    .auth-overlay{position:fixed;inset:0;background:linear-gradient(0deg,rgba(2,6,23,0.6),rgba(2,6,23,0.6));display:flex;align-items:center;justify-content:center;z-index:60}
   </style>
 </head>
-<body class="bg-gray-950 text-white min-h-screen p-6">
-  <div class="max-w-7xl mx-auto">
-    <header class="text-center mb-8">
-      <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400">Homework Tracker</h1>
-      <p class="text-gray-400">Organize tasks, plan tonight, and auto-schedule.</p>
-    </header>
-
-    <!-- Week Navigation -->
-    <div class="flex justify-between items-center mb-6">
-      <button id="prev-week" class="px-3 py-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">◀</button>
-      <h2 id="week-label" class="text-2xl font-bold"></h2>
-      <button id="next-week" class="px-3 py-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">▶</button>
-    </div>
-
-    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-10"></div>
-
-    <!-- Tonight Section -->
-    <div class="bg-gray-900 rounded-2xl p-6 shadow-xl">
-      <h2 class="text-2xl font-bold mb-4 text-center">Tonight</h2>
-      <div class="flex justify-between mb-2 text-sm">
-        <div>To Do (<span id="todo-count">0</span>): <span id="todo-list-inline"></span></div>
-        <div>Done (<span id="done-count">0</span>): <span id="done-list-inline"></span></div>
-      </div>
-      <ul id="tonight-list" class="space-y-2 mb-4"></ul>
-
-      <div class="flex gap-2 mb-6">
-        <input id="custom-task-input" type="text" placeholder="Custom task..." class="flex-1 bg-gray-700 p-2 rounded-lg">
-        <button id="add-custom" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition">Add</button>
-      </div>
-
-      <div>
-        <h3 class="text-lg font-semibold mb-2">Generate Schedule</h3>
-        <div class="flex gap-2 mb-2 items-center">
-          <input type="time" id="schedule-start-time-input" class="p-2 bg-gray-700 rounded-lg">
-          <button id="current-time" class="px-2 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition">Current</button>
+<body class="min-h-screen py-8 px-6 md:px-12">
+  <!-- Auth overlay (hidden if not using Firebase or logged in) -->
+  <div id="auth-overlay" class="auth-overlay hidden">
+    <div class="bg-[#071029] p-6 rounded-2xl w-full max-w-md card">
+      <h2 class="text-xl font-bold mb-3">Sign in to save your data</h2>
+      <div class="flex flex-col gap-3">
+        <button id="google-signin" class="btn w-full py-2 rounded-md bg-white text-black">Sign in with Google</button>
+        <div class="flex items-center gap-2 small-muted">or</div>
+        <input id="email-input" type="email" placeholder="Email" class="input p-2 rounded-md" />
+        <input id="password-input" type="password" placeholder="Password" class="input p-2 rounded-md" />
+        <div class="flex gap-2">
+          <button id="email-signin" class="btn flex-1 py-2 rounded-md bg-indigo-600">Sign in</button>
+          <button id="email-signup" class="btn flex-1 py-2 rounded-md bg-gray-700">Sign up</button>
         </div>
-        <button id="generate-schedule" class="w-full px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition mb-4">Create My Schedule</button>
-        <ul id="schedule-list" class="space-y-2"></ul>
+        <button id="use-local" class="btn w-full py-2 rounded-md bg-gray-600">Use local (no account)</button>
       </div>
     </div>
   </div>
 
-  <script>
-    const classes = ["Math","English","Spanish","Comp Sci","HOTA","Physics"];
-    let today = new Date();
-    let weekStart = getStartOfWeek(new Date());
-    let tasks = {};
-    let tonight = [];
+  <div class="max-w-7xl mx-auto">
+    <header class="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text" style="background:linear-gradient(90deg,#60a5fa,#7c3aed)">Homework Tracker</h1>
+        <p class="small-muted mt-1">Weekly planner • Tonight list • Auto-schedule • Sync with Firebase</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="user-info" class="small-muted"></div>
+        <button id="signout" class="btn py-2 px-3 rounded-md bg-gray-800 hidden">Sign out</button>
+      </div>
+    </header>
 
-    function getStartOfWeek(date){
-      const d=new Date(date);
-      const day=d.getDay();
-      const diff=d.getDate()-day+(day===0?-6:1);
-      return new Date(d.setDate(diff));
+    <!-- top controls -->
+    <div class="flex items-center justify-between mb-4 gap-4">
+      <div class="flex items-center gap-3">
+        <button id="prev-week" class="btn px-3 py-2 rounded-full bg-gray-800">◀</button>
+        <div id="week-label" class="text-lg font-semibold"></div>
+        <button id="next-week" class="btn px-3 py-2 rounded-full bg-gray-800">▶</button>
+      </div>
+      <div class="flex gap-2 items-center">
+        <button id="today-btn" class="btn px-3 py-2 rounded-md bg-indigo-700">Today</button>
+        <button id="reset-storage" class="btn px-3 py-2 rounded-md bg-gray-800">Reset</button>
+      </div>
+    </div>
+
+    <!-- calendar grid -->
+    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-8"></div>
+
+    <!-- Tonight + Schedule -->
+    <section class="card rounded-2xl p-6">
+      <div class="md:flex md:items-start md:gap-8">
+        <div class="flex-1">
+          <h2 class="text-2xl font-semibold mb-2">Tonight</h2>
+
+          <div class="flex items-center justify-between mb-3 small-muted">
+            <div>To Do: <span id="todo-count">0</span> • <span id="todo-time">0m</span></div>
+            <div>Done: <span id="done-count">0</span> • <span id="done-time">0m</span></div>
+          </div>
+
+          <ul id="tonight-list" class="space-y-3 mb-4"></ul>
+
+          <div class="flex gap-2 mb-4">
+            <input id="custom-task-input" class="input flex-1 p-2 rounded-md text-sm" placeholder="Add custom task and press Enter" />
+            <button id="add-custom" class="btn px-4 py-2 rounded-md bg-blue-600">Add</button>
+          </div>
+        </div>
+
+        <div class="w-full md:w-96 mt-4 md:mt-0">
+          <h3 class="text-lg font-semibold mb-2">Schedule</h3>
+          <div class="flex gap-2 mb-3">
+            <input id="schedule-start-time-input" type="time" class="input p-2 rounded-md" />
+            <button id="current-time" class="btn px-3 py-2 rounded-md bg-gray-700">Current</button>
+          </div>
+          <button id="generate-schedule" class="btn w-full py-2 rounded-md bg-gradient-to-r from-indigo-600 to-purple-600 mb-4">Create My Schedule</button>
+          <ul id="schedule-list" class="space-y-3"></ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    // ---------- Firebase config ----------
+    // Paste your Firebase config object here (from Firebase console -> Project settings -> Web app)
+    // Example:
+    // const FIREBASE_CONFIG = { apiKey: '...', authDomain: '...', projectId: '...', ... };
+    const FIREBASE_CONFIG = null; // <-- REPLACE with your config object to enable cloud sync and auth
+
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+    import { getAuth, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+    import { getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+    // ---------- state and DOM refs ----------
+    const classes = ['Math','English','Spanish','Comp Sci','HOTA','Physics'];
+    let state = { tasks:{}, tonight:[], weekStart: null };
+    const today = new Date();
+
+    const q = (id)=>document.getElementById(id);
+
+    // ---------- persistence helpers ----------
+    const STORAGE_KEY = 'hw-tracker-v3';
+    function loadLocal(){ try{ const r=localStorage.getItem(STORAGE_KEY); if(r) state = JSON.parse(r); }catch{} if(!state.weekStart) state.weekStart = getStartOfWeek(new Date()).toISOString(); }
+    function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+    // ---------- Firebase init (optional) ----------
+    let app=null, auth=null, db=null, currentUser=null;
+    async function initFirebase(){
+      if(!FIREBASE_CONFIG) return false;
+      try{
+        app = initializeApp(FIREBASE_CONFIG);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        try{ await enableIndexedDbPersistence(db); }catch(e){ console.warn('IndexedDB persistence not enabled',e); }
+
+        onAuthStateChanged(auth, async user=>{
+          currentUser = user;
+          if(user){
+            q('auth-overlay').classList.add('hidden');
+            q('signout').classList.remove('hidden');
+            q('user-info').textContent = user.email || user.displayName || 'Signed in';
+            await loadRemote(user.uid);
+          } else {
+            // show overlay
+            q('auth-overlay').classList.remove('hidden');
+            q('signout').classList.add('hidden');
+            q('user-info').textContent = '';
+          }
+        });
+        return true;
+      }catch(err){ console.error('Firebase init failed', err); return false; }
     }
 
+    // ---------- remote sync ----------
+    async function loadRemote(uid){
+      if(!db) return;
+      try{
+        const ref = doc(db, 'homework', uid);
+        const snap = await getDoc(ref);
+        if(snap.exists()){
+          const d = snap.data();
+          state.tasks = d.tasks || {};
+          state.tonight = d.tonight || [];
+          state.weekStart = d.weekStart || state.weekStart;
+        } else {
+          // push local to remote
+          await setDoc(ref, state);
+        }
+        saveLocal(); renderWeek(); renderTonight();
+      }catch(e){ console.error('Load remote failed', e); }
+    }
+
+    async function syncRemote(){ if(!db || !currentUser) return; try{ const ref = doc(db, 'homework', currentUser.uid); await setDoc(ref, state); }catch(e){console.warn('sync failed',e);} }
+
+    // ---------- utilities ----------
+    function getStartOfWeek(date){ const d=new Date(date); const day=d.getDay(); const diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); d.setHours(0,0,0,0); return d; }
+    function keyForDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x.toDateString(); }
+    function isTomorrow(day){ const t=new Date(); t.setDate(t.getDate()+1); return new Date(day).toDateString() === t.toDateString(); }
+
+    // ---------- rendering calendar (aligned grid) ----------
     function renderWeek(){
-      document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
-      const grid=document.getElementById('calendar-grid');
-      grid.innerHTML='';
+      const wk = new Date(state.weekStart || getStartOfWeek(new Date()).toISOString());
+      q('week-label').textContent = `Week of ${wk.toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
+      const grid = q('calendar-grid'); grid.innerHTML='';
       for(let i=0;i<5;i++){
-        const day=new Date(weekStart);
-        day.setDate(weekStart.getDate()+i);
-        const card=document.createElement('div');
-        card.className='bg-gray-900 p-4 rounded-xl shadow-lg hover:shadow-2xl transition flex flex-col';
-        const title=document.createElement('h3');
-        title.className='text-xl font-semibold text-center mb-2';
-        title.textContent=day.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+        const day = new Date(wk); day.setDate(wk.getDate()+i);
+        const card = document.createElement('div'); card.className='card card-grid rounded-xl p-4 shadow-lg';
+        const title = document.createElement('h3'); title.className='text-lg font-semibold text-center mb-1'; title.textContent = day.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
         card.appendChild(title);
-        classes.forEach(cls=>{
-          const section=document.createElement('div');
-          section.className='mb-3 flex flex-col';
-          const label=document.createElement('p');
-          label.className='font-medium text-gray-300';
-          label.textContent=cls;
-          section.appendChild(label);
-          const input=document.createElement('input');
-          input.className='w-full bg-gray-700 p-2 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500';
-          input.placeholder='Add assignment...';
-          input.addEventListener('keydown',e=>{
-            if(e.key==='Enter'&&e.target.value.trim()!==''){
-              addTask(day,cls,e.target.value.trim());
-              if(day.getDate()===today.getDate()+1||today.getDay()===6||today.getDay()===0){
-                addTonight(e.target.value.trim());
-              }
-              e.target.value='';
-            }
-          });
-          section.appendChild(input);
-          const ul=document.createElement('ul');
-          ul.id=`${day.toDateString()}-${cls}`;
-          ul.className='mt-2 space-y-1 min-h-[1rem]';
-          section.appendChild(ul);
-          card.appendChild(section);
+        classes.forEach((cls, idx)=>{
+          const sec = document.createElement('div'); sec.className='flex flex-col';
+          const lab = document.createElement('div'); lab.className='flex items-center justify-between mb-1';
+          const cname = document.createElement('div'); cname.className='font-medium text-neutral-300'; cname.textContent = cls;
+          lab.appendChild(cname);
+          sec.appendChild(lab);
+
+          const input = document.createElement('input'); input.className='input w-full p-2 rounded-md text-sm'; input.placeholder='Add assignment...';
+          input.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.value.trim()){ addAssignment(day,cls,e.target.value.trim()); e.target.value=''; } });
+          sec.appendChild(input);
+
+          const ul = document.createElement('ul'); ul.id = `${keyForDay(day)}|${cls}`; ul.className = 'mt-2 space-y-1 min-h-[1rem]'; sec.appendChild(ul);
+          card.appendChild(sec);
         });
         grid.appendChild(card);
       }
       renderTasks();
     }
 
-    function addTask(day,cls,name){
-      const key=day.toDateString();
-      if(!tasks[key])tasks[key]={};
-      if(!tasks[key][cls])tasks[key][cls]=[];
-      tasks[key][cls].push(name);
-      renderTasks();
-    }
+    function addAssignment(day, cls, txt){ const k = keyForDay(day); if(!state.tasks[k]) state.tasks[k] = {}; if(!state.tasks[k][cls]) state.tasks[k][cls]=[]; state.tasks[k][cls].push({id:crypto.randomUUID(),text:txt}); saveLocal(); syncRemote(); renderTasks(); }
 
+    // ---------- render tasks for each day/class - with checkbox + delete + aligned layout ----------
     function renderTasks(){
-      Object.keys(tasks).forEach(day=>{
-        Object.keys(tasks[day]).forEach(cls=>{
-          const ul=document.getElementById(`${day}-${cls}`);
-          if(!ul)return;
-          ul.innerHTML='';
-          tasks[day][cls].forEach(t=>{
-            const li=document.createElement('li');
-            li.className='flex justify-between items-center bg-gray-800 rounded-lg px-2 py-1 text-sm transition hover:bg-gray-700';
-            const span=document.createElement('span');
-            span.textContent=t;
-            li.appendChild(span);
+      Object.keys(state.tasks).forEach(dayKey=>{
+        Object.keys(state.tasks[dayKey]).forEach(cls=>{
+          const ul = document.getElementById(`${dayKey}|${cls}`); if(!ul) return; ul.innerHTML='';
+          const dayDate = new Date(dayKey);
+          const showCheckbox = !(isTomorrow(dayDate) || (today.getDay()===6 || today.getDay()===0) && dayDate.getDay()===1);
+          state.tasks[dayKey][cls].forEach(item=>{
+            const li = document.createElement('li'); li.className='flex items-center justify-between bg-gray-800 rounded-md px-2 py-1 list-item';
+            const left = document.createElement('div'); left.className='flex items-center gap-2';
+            if(showCheckbox){ const cb = document.createElement('input'); cb.type='checkbox'; cb.title='Send to Tonight'; cb.onchange = e=>{ if(e.target.checked){ addToTonight(item.text); } }; left.appendChild(cb); }
+            const span = document.createElement('span'); span.textContent = item.text; span.className='truncate'; left.appendChild(span);
+            li.appendChild(left);
 
-            const controls=document.createElement('div');
-            controls.className='flex gap-1';
-            if(!(new Date(day).getDate()===today.getDate()+1 || (today.getDay()===6||today.getDay()===0))){
-              const btn=document.createElement('button');
-              btn.textContent='Tonight';
-              btn.className='px-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition';
-              btn.onclick=()=>addTonight(t);
-              controls.appendChild(btn);
+            const controls = document.createElement('div'); controls.className='flex gap-2 items-center';
+            if(!isTomorrow(dayDate)){
+              const btn = document.createElement('button'); btn.className='btn px-2 py-1 rounded-md bg-indigo-600 text-sm'; btn.textContent='Add to Tonight'; btn.onclick = ()=>addToTonight(item.text); controls.appendChild(btn);
             }
-            const del=document.createElement('button');
-            del.textContent='Delete';
-            del.className='px-2 bg-red-600 rounded-lg hover:bg-red-500 transition';
-            del.onclick=()=>{tasks[day][cls]=tasks[day][cls].filter(x=>x!==t);renderTasks();};
+            const del = document.createElement('button'); del.className='btn px-2 py-1 rounded-md bg-red-600 text-sm'; del.textContent='Delete'; del.onclick=()=>{ state.tasks[dayKey][cls] = state.tasks[dayKey][cls].filter(x=>x.id!==item.id); saveLocal(); syncRemote(); renderTasks(); };
             controls.appendChild(del);
-
             li.appendChild(controls);
             ul.appendChild(li);
           });
@@ -157,95 +238,80 @@
       });
     }
 
-    function addTonight(name){
-      if(tonight.find(t=>t.name===name))return;
-      tonight.push({id:crypto.randomUUID(),name,time:30,done:false});
-      renderTonight();
-    }
+    // ---------- Tonight list (drag reorder + totals) ----------
+    function addToTonight(name){ if(!name) return; if(state.tonight.find(t=>t.name===name)) return; state.tonight.push({id:crypto.randomUUID(),name,time:30,done:false}); saveLocal(); syncRemote(); renderTonight(); }
 
     function renderTonight(){
-      const list=document.getElementById('tonight-list');
-      list.innerHTML='';
-      tonight.forEach(t=>{
-        const li=document.createElement('li');
-        li.className='flex justify-between items-center bg-gray-800 p-2 rounded-lg fade-enter';
-        setTimeout(()=>li.classList.remove('fade-enter'),10);
-
-        const left=document.createElement('div');
-        left.className='flex items-center gap-2';
-        const cb=document.createElement('input');
-        cb.type='checkbox';
-        cb.checked=t.done;
-        cb.onchange=()=>{t.done=!t.done;renderTonight();};
-        const span=document.createElement('span');
-        span.textContent=t.name;
-        if(t.done)span.className='line-through text-gray-500';
-        left.appendChild(cb);left.appendChild(span);
-
-        const right=document.createElement('div');
-        right.className='flex items-center gap-1';
-        const inp=document.createElement('input');
-        inp.type='number';inp.value=t.time;
-        inp.className='w-16 bg-gray-700 p-1 rounded text-center';
-        inp.onchange=e=>{t.time=parseInt(e.target.value)||30;};
-        right.append('⏱',inp,'mins');
-
-        li.append(left,right);
-        list.appendChild(li);
+      const list = q('tonight-list'); list.innerHTML='';
+      state.tonight.forEach((t,idx)=>{
+        const li = document.createElement('li'); li.className='flex items-center justify-between bg-gray-800 p-2 rounded-md list-item fade';
+        const left = document.createElement('div'); left.className='flex items-center gap-3';
+        const handle = document.createElement('div'); handle.className='text-neutral-400 cursor-grab'; handle.textContent='☰'; left.appendChild(handle);
+        const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = t.done; cb.onchange = ()=>{ t.done = cb.checked; saveLocal(); syncRemote(); renderTonight(); };
+        const title = document.createElement('div'); title.className='max-w-xs truncate'; title.textContent = t.name; if(t.done) title.classList.add('line-through','text-neutral-500');
+        left.appendChild(cb); left.appendChild(title);
+        const right = document.createElement('div'); right.className='flex items-center gap-2';
+        const timeIn = document.createElement('input'); timeIn.type='number'; timeIn.value = t.time; timeIn.className='time-pill input p-1 rounded-md text-sm text-center'; timeIn.onchange = (e)=>{ t.time = parseInt(e.target.value)||30; saveLocal(); syncRemote(); renderTonight(); };
+        const up = document.createElement('button'); up.className='btn px-2 py-1 rounded-md bg-gray-700'; up.textContent='↑'; up.onclick = ()=> moveTonight(idx, idx-1);
+        const down = document.createElement('button'); down.className='btn px-2 py-1 rounded-md bg-gray-700'; down.textContent='↓'; down.onclick = ()=> moveTonight(idx, idx+1);
+        const del = document.createElement('button'); del.className='btn px-2 py-1 rounded-md bg-red-600'; del.textContent='Delete'; del.onclick = ()=>{ state.tonight.splice(idx,1); saveLocal(); syncRemote(); renderTonight(); };
+        right.appendChild(timeIn); right.appendChild(up); right.appendChild(down); right.appendChild(del);
+        li.appendChild(left); li.appendChild(right); list.appendChild(li);
       });
 
-      new Sortable(list, { animation: 150, onEnd: ()=>{
-        const newOrder=[];
-        list.querySelectorAll('li').forEach(li=>{
-          const name=li.querySelector('span').textContent;
-          const task=tonight.find(t=>t.name===name);
-          if(task)newOrder.push(task);
+      // sortable
+      new Sortable(list, { animation: 160, handle: '.cursor-grab, .text-neutral-400', onEnd: (evt)=>{
+        const newOrder = []; list.querySelectorAll('li').forEach(li=>{
+          const name = li.querySelector('div.max-w-xs')?.textContent || li.querySelector('span')?.textContent;
+          const task = state.tonight.find(t=>t.name===name);
+          if(task) newOrder.push(task);
         });
-        tonight=newOrder;
+        state.tonight = newOrder; saveLocal(); syncRemote(); renderTonight();
       }});
 
-      const todo=tonight.filter(t=>!t.done);
-      const done=tonight.filter(t=>t.done);
-      document.getElementById('todo-count').textContent=todo.length;
-      document.getElementById('done-count').textContent=done.length;
-      document.getElementById('todo-list-inline').textContent=todo.map(t=>t.name).join(', ');
-      document.getElementById('done-list-inline').textContent=done.map(t=>t.name).join(', ');
+      // totals
+      const todo = state.tonight.filter(t=>!t.done); const done = state.tonight.filter(t=>t.done);
+      q('todo-count').textContent = todo.length; q('done-count').textContent = done.length;
+      const todoTime = todo.reduce((s,i)=>s + (parseInt(i.time)||0),0); const doneTime = done.reduce((s,i)=>s + (parseInt(i.time)||0),0);
+      q('todo-time').textContent = formatMinutes(todoTime); q('done-time').textContent = formatMinutes(doneTime);
+
+      // inline lists next to counters (show names) - optional small list
     }
 
-    function generateSchedule(){
-      let start=document.getElementById('schedule-start-time-input').value;
-      if(!start){
-        const now=new Date();
-        start=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      }
-      let current=new Date();
-      const [h,m]=start.split(':').map(Number);
-      current.setHours(h,m,0,0);
-      const schedule=document.getElementById('schedule-list');
-      schedule.innerHTML='';
-      tonight.filter(t=>!t.done).forEach(t=>{
-        const end=new Date(current.getTime()+t.time*60000);
-        const li=document.createElement('li');
-        li.className='bg-gray-800 p-2 rounded-lg fade-enter';
-        setTimeout(()=>li.classList.remove('fade-enter'),10);
-        li.innerHTML=`<p class='font-semibold'>${t.name}</p><p class='text-sm text-gray-400'>${current.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>`;
-        schedule.appendChild(li);
-        current=end;
-      });
-    }
+    function moveTonight(from,to){ if(to<0 || to>=state.tonight.length) return; const [it] = state.tonight.splice(from,1); state.tonight.splice(to,0,it); saveLocal(); syncRemote(); renderTonight(); }
 
-    document.getElementById('prev-week').onclick=()=>{weekStart.setDate(weekStart.getDate()-7);renderWeek();};
-    document.getElementById('next-week').onclick=()=>{weekStart.setDate(weekStart.getDate()+7);renderWeek();};
-    document.getElementById('add-custom').onclick=()=>{
-      const val=document.getElementById('custom-task-input').value.trim();
-      if(val){addTonight(val);document.getElementById('custom-task-input').value='';}
-    };
-    document.getElementById('current-time').onclick=()=>{
-      document.getElementById('schedule-start-time-input').value=new Date().toTimeString().slice(0,5);
-    };
-    document.getElementById('generate-schedule').onclick=generateSchedule;
+    function formatMinutes(mins){ if(mins<60) return `${mins}m`; const h=Math.floor(mins/60); const m=mins%60; return `${h}h ${m}m`; }
 
-    renderWeek();
+    // ---------- schedule ----------
+    function generateSchedule(){ let start = q('schedule-start-time-input').value; if(!start){ const now = new Date(); start = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`; }
+      const [h,m] = start.split(':').map(Number); let cur = new Date(); cur.setHours(h,m,0,0);
+      const list = q('schedule-list'); list.innerHTML=''; state.tonight.filter(t=>!t.done).forEach(t=>{ const end = new Date(cur.getTime()+t.time*60000); const li = document.createElement('li'); li.className='bg-gray-800 p-3 rounded-md fade'; li.innerHTML = `<div class="font-semibold">${escapeHtml(t.name)}</div><div class='text-sm text-neutral-400'>${cur.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`; list.appendChild(li); cur = end; }); }
+
+    function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    // ---------- events ----------
+    q('prev-week').addEventListener('click', ()=>{ const wk = new Date(state.weekStart||getStartOfWeek(new Date()).toISOString()); wk.setDate(wk.getDate()-7); state.weekStart = wk.toISOString(); saveLocal(); syncRemote(); renderWeek(); });
+    q('next-week').addEventListener('click', ()=>{ const wk = new Date(state.weekStart||getStartOfWeek(new Date()).toISOString()); wk.setDate(wk.getDate()+7); state.weekStart = wk.toISOString(); saveLocal(); syncRemote(); renderWeek(); });
+    q('today-btn').addEventListener('click', ()=>{ state.weekStart = getStartOfWeek(new Date()).toISOString(); saveLocal(); syncRemote(); renderWeek(); });
+    q('reset-storage').addEventListener('click', ()=>{ if(confirm('Clear local saved data?')){ localStorage.removeItem(STORAGE_KEY); state={tasks:{},tonight:[],weekStart:getStartOfWeek(new Date()).toISOString()}; renderWeek(); renderTonight(); } });
+    q('add-custom').addEventListener('click', ()=>{ const v = q('custom-task-input').value.trim(); if(!v) return; addToTonight(v); q('custom-task-input').value=''; });
+    q('custom-task-input').addEventListener('keydown', e=>{ if(e.key==='Enter'){ const v=e.target.value.trim(); if(v){ addToTonight(v); e.target.value=''; } } });
+    q('current-time').addEventListener('click', ()=>{ q('schedule-start-time-input').value = new Date().toTimeString().slice(0,5); });
+    q('generate-schedule').addEventListener('click', generateSchedule);
+
+    // ---------- auth handlers (if firebase enabled) ----------
+    q('use-local').addEventListener('click', ()=>{ q('auth-overlay').classList.add('hidden'); q('signout').classList.add('hidden'); });
+    q('signout').addEventListener('click', async ()=>{ if(!auth){ q('auth-overlay').classList.remove('hidden'); return; } await signOut(auth); state = {tasks:state.tasks||{}, tonight:state.tonight||[], weekStart:state.weekStart||getStartOfWeek(new Date()).toISOString() }; saveLocal(); renderWeek(); renderTonight(); });
+
+    // firebase auth buttons
+    q('google-signin').addEventListener('click', async ()=>{ try{ const provider = new GoogleAuthProvider(); await signInWithPopup(auth, provider); }catch(e){ alert('Sign in failed'); console.error(e); } });
+    q('email-signup').addEventListener('click', async ()=>{ try{ const em = q('email-input').value; const pw = q('password-input').value; await createUserWithEmailAndPassword(auth, em, pw); }catch(e){ alert('Sign up failed'); console.error(e); } });
+    q('email-signin').addEventListener('click', async ()=>{ try{ const em = q('email-input').value; const pw = q('password-input').value; await signInWithEmailAndPassword(auth, em, pw); }catch(e){ alert('Sign in failed'); console.error(e); } });
+
+    // ---------- init ----------
+    loadLocal(); if(FIREBASE_CONFIG){ const ok = await initFirebase(); if(!ok) q('auth-overlay').classList.add('hidden'); } else { q('auth-overlay').classList.add('hidden'); }
+    renderWeek(); renderTonight();
+
   </script>
 </body>
 </html>
