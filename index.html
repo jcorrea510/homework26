@@ -101,6 +101,7 @@
     let inBreak = false;
     let breakStart = null;
     let totalBreakMs = 0;
+    let breakTimerInterval = null;
 
     // Use a single, clean object to map subjects to Tailwind color classes
     const subjectColors = {
@@ -381,26 +382,29 @@
       const btn = document.getElementById('break-btn');
       const timer = document.getElementById('break-timer');
       const msg = document.getElementById('break-delay-msg');
+
       if (!inBreak) {
         inBreak = true;
         breakStart = new Date();
         btn.textContent = 'End Break';
         btn.classList.remove('bg-green-600');
         btn.classList.add('bg-red-600');
-        const interval = setInterval(() => {
-          if (!inBreak) { clearInterval(interval); return; }
+
+        breakTimerInterval = setInterval(() => {
           const elapsed = new Date() - breakStart;
           timer.textContent = `${Math.floor(elapsed / 60000)}m ${Math.floor((elapsed % 60000) / 1000)}s`;
         }, 1000);
+
       } else {
         inBreak = false;
+        clearInterval(breakTimerInterval);
         const elapsed = new Date() - breakStart;
         totalBreakMs += elapsed;
         btn.textContent = 'Start Break';
         btn.classList.remove('bg-red-600');
         btn.classList.add('bg-green-600');
         timer.textContent = '';
-        msg.textContent = `Schedule delayed by ${Math.floor(totalBreakMs / 60000)} minutes.`;
+        msg.textContent = `Schedule delayed by ${Math.floor(totalBreakMs / 60000)} minutes. Click "Create My Schedule" to apply the change.`;
       }
     }
 
