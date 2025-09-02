@@ -142,7 +142,8 @@
           const section = document.createElement('div');
           section.className = 'mb-3';
           const label = document.createElement('p');
-          label.className = `font-medium text-gray-300 ${subjectColors[cls]}`;
+          // Corrected class to make subject colors work
+          label.className = `font-medium ${subjectColors[cls]}`;
           label.textContent = cls;
           section.appendChild(label);
           const input = document.createElement('input');
@@ -164,7 +165,7 @@
               // Render the new element
               const ul = document.getElementById(`${day.toDateString()}-${cls.replace(' ', '-')}`);
               if (ul) {
-                const isChecked = isDueTomorrow || tonight.some(t => t.name === taskName && t.cls === cls);
+                const isChecked = isDueTomorrow;
                 addAndRenderTaskElement(ul, taskData, day, isChecked);
               }
 
@@ -209,7 +210,8 @@
       const checkbox = li.querySelector('input[type="checkbox"]');
       checkbox.addEventListener('change', () => toggleTonightTask(checkbox, taskData.name, taskData.cls));
       const deleteBtn = li.querySelector('button');
-      deleteBtn.addEventListener('click', () => deleteTask(deleteBtn, day, taskData.cls, taskData.name));
+      // Pass the date string to deleteTask, not the full Date object
+      deleteBtn.addEventListener('click', () => deleteTask(deleteBtn, day.toDateString(), taskData.cls, taskData.name));
     }
 
 
@@ -221,6 +223,7 @@
           ul.innerHTML = '';
           tasks[day][cls].forEach(t => {
             const isChecked = tonight.find(x => x.name === t && x.cls === cls) !== undefined;
+            // The `day` here is a string, which is correct
             addAndRenderTaskElement(ul, { name: t, cls: cls }, day, isChecked);
           });
         });
@@ -235,11 +238,21 @@
       }
     }
 
-    function deleteTask(button, day, cls, name) {
-      tasks[day][cls] = tasks[day][cls].filter(x => x !== name);
+    function deleteTask(button, dayString, cls, name) {
+      // Check for existence of the task list before trying to filter it
+      if (tasks[dayString] && tasks[dayString][cls]) {
+        tasks[dayString][cls] = tasks[dayString][cls].filter(x => x !== name);
+        // Optional: delete the subject key if its list is now empty
+        if (tasks[dayString][cls].length === 0) {
+          delete tasks[dayString][cls];
+        }
+      }
       removeTonight(name, cls);
-      button.closest('li').classList.add('fade-out'); // Add a fade-out class for animation
-      setTimeout(() => button.closest('li').remove(), 300); // Remove after animation
+      const listItem = button.closest('li');
+      if (listItem) {
+        listItem.classList.add('fade-out');
+        setTimeout(() => listItem.remove(), 300);
+      }
     }
 
     function addTonight(name, cls) {
