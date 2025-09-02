@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Homework Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -10,8 +10,12 @@
     body { font-family: 'Inter', sans-serif; }
     .fade-enter { opacity: 0; transform: translateY(10px); }
     .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
-    .fade-exit { opacity: 1; transform: translateY(0); }
-    .fade-exit-active { opacity: 0; transform: translateY(-10px); transition: all 0.3s ease; }
+    .subject-Math { color: #ef4444; }     /* red */
+    .subject-English { color: #eab308; }  /* yellow */
+    .subject-Spanish { color: #a855f7; }  /* purple */
+    .subject-Comp\\ Sci { color: #3b82f6; }/* blue */
+    .subject-HOTA { color: #f97316; }     /* orange */
+    .subject-Physics { color: #22c55e; }  /* green */
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen p-6">
@@ -30,21 +34,18 @@
 
     <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-10"></div>
 
-    <!-- Tonight and Schedule Side by Side -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Tonight Section -->
       <div class="bg-gray-900 rounded-2xl p-6 shadow-xl">
         <h2 class="text-2xl font-bold mb-4 text-center">Tonight</h2>
         <ul id="tonight-list" class="space-y-2 mb-4"></ul>
-
         <div class="flex gap-2 mb-6">
           <input id="custom-task-input" type="text" placeholder="Custom task..." class="flex-1 bg-gray-700 p-2 rounded-lg">
           <button id="add-custom" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition">Add</button>
         </div>
-
         <div class="mt-4 flex justify-between text-sm text-gray-400">
-          <p>To Do: <span id="todo-count">0</span> (<span id="todo-time">0</span> mins)</p>
-          <p>Done: <span id="done-count">0</span> (<span id="done-time">0</span> mins)</p>
+          <p>To Do: <span id="todo-count">0</span></p>
+          <p>Done: <span id="done-count">0</span></p>
         </div>
       </div>
 
@@ -56,35 +57,34 @@
           <button id="current-time" class="px-2 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition">Current</button>
         </div>
         <button id="generate-schedule" class="w-full px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition mb-4">Create My Schedule</button>
-
-        <div class="flex gap-2 mb-2 items-center">
-          <button id="start-break" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-500 transition">Start Break</button>
-          <button id="end-break" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-500 transition">End Break</button>
-          <span id="break-timer" class="ml-2 text-gray-400"></span>
+        <div class="flex items-center gap-2 mb-4">
+          <button id="break-btn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-500 transition">Start Break</button>
+          <span id="break-timer" class="text-gray-400 text-sm"></span>
         </div>
-
-        <p id="schedule-delay" class="text-sm text-yellow-400 mb-2"></p>
+        <p id="break-delay-msg" class="text-sm text-gray-400 mb-2"></p>
         <ul id="schedule-list" class="space-y-2"></ul>
       </div>
     </div>
   </div>
 
   <script>
-    const classes = [
-      { name: "Math", color: "text-red-400" },
-      { name: "English", color: "text-yellow-400" },
-      { name: "Spanish", color: "text-purple-400" },
-      { name: "Comp Sci", color: "text-blue-400" },
-      { name: "HOTA", color: "text-orange-400" },
-      { name: "Physics", color: "text-green-400" }
-    ];
+    const classes = ["Math","English","Spanish","Comp Sci","HOTA","Physics"];
     let today = new Date();
     let weekStart = getStartOfWeek(new Date());
     let tasks = {};
     let tonight = [];
+    let inBreak = false;
     let breakStart = null;
-    let totalBreakDelay = 0;
-    let breakInterval;
+    let totalBreakMs = 0;
+
+    const subjectColors = {
+      "Math": "subject-Math",
+      "English": "subject-English",
+      "Spanish": "subject-Spanish",
+      "Comp Sci": "subject-Comp Sci",
+      "HOTA": "subject-HOTA",
+      "Physics": "subject-Physics"
+    };
 
     function getStartOfWeek(date){
       const d=new Date(date);
@@ -110,24 +110,26 @@
           const section=document.createElement('div');
           section.className='mb-3';
           const label=document.createElement('p');
-          label.className=`font-medium ${cls.color}`;
-          label.textContent=cls.name;
+          label.className='font-medium text-gray-300';
+          label.textContent=cls;
           section.appendChild(label);
           const input=document.createElement('input');
           input.className='w-full bg-gray-700 p-2 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500';
           input.placeholder='Add assignment...';
           input.addEventListener('keydown',e=>{
             if(e.key==='Enter'&&e.target.value.trim()!==''){
-              addTask(day,cls.name,e.target.value.trim());
-              if(day.getDay()===((today.getDay()+1)%7) || (today.getDay()===6&&day.getDay()===1) || (today.getDay()===0&&day.getDay()===1)){
-                addTonight(e.target.value.trim(),cls.name,day);
+              addTask(day,cls,e.target.value.trim());
+              const isTomorrow = day.getDate() === today.getDate()+1 && day.getMonth() === today.getMonth();
+              const isSundayToMonday = today.getDay()===0 && day.getDay()===1;
+              if(isTomorrow || isSundayToMonday){
+                addTonight(e.target.value.trim(), cls);
               }
               e.target.value='';
             }
           });
           section.appendChild(input);
           const ul=document.createElement('ul');
-          ul.id=`${day.toDateString()}-${cls.name}`;
+          ul.id=`${day.toDateString()}-${cls}`;
           ul.className='mt-2 space-y-1';
           section.appendChild(ul);
           card.appendChild(section);
@@ -153,59 +155,44 @@
           ul.innerHTML='';
           tasks[day][cls].forEach(t=>{
             const li=document.createElement('li');
-            li.className='flex justify-between items-center bg-gray-800 rounded-lg px-2 py-1 text-sm transition hover:bg-gray-700';
-            li.innerHTML=`<span>${t}</span>`;
-
-            const controls=document.createElement('div');
-            controls.className='flex gap-2';
-
+            li.className='flex justify-between bg-gray-800 rounded-lg px-2 py-1 text-sm transition hover:bg-gray-700';
+            const left=document.createElement('div');
             const cb=document.createElement('input');
             cb.type='checkbox';
             cb.onchange=()=>{
-              if(cb.checked){ addTonight(t,cls,new Date(day)); } else { removeTonight(t,cls); }
+              if(cb.checked){ addTonight(t, cls); }
+              else { removeTonight(t, cls); }
             };
-            controls.appendChild(cb);
+            if(tonight.find(x=>x.name===t && x.cls===cls)) cb.checked=true;
+            const span=document.createElement('span');
+            span.textContent=t;
+            left.appendChild(cb);
+            left.appendChild(span);
 
             const del=document.createElement('button');
-            del.textContent='✖';
-            del.className='text-red-500 hover:text-red-400';
-            del.onclick=()=>{ removeTask(day,cls,t); };
-            controls.appendChild(del);
+            del.textContent='❌';
+            del.className='ml-2 text-red-500 hover:text-red-400';
+            del.onclick=()=>{
+              tasks[day][cls]=tasks[day][cls].filter(x=>x!==t);
+              removeTonight(t, cls);
+              renderTasks();
+            };
 
-            li.appendChild(controls);
+            li.append(left,del);
             ul.appendChild(li);
           });
         });
       });
     }
 
-    function removeTask(day,cls,name){
-      tasks[day][cls]=tasks[day][cls].filter(t=>t!==name);
-      removeTonight(name,cls,true);
-      renderTasks();
-    }
-
-    function addTonight(name,cls,day){
-      if(tonight.find(t=>t.name===name&&t.cls===cls))return;
+    function addTonight(name, cls){
+      if(tonight.find(t=>t.name===name && t.cls===cls))return;
       tonight.push({id:crypto.randomUUID(),name,cls,time:30,done:false});
       renderTonight();
     }
 
-    function removeTonight(name,cls,fromCalendar=false){
-      tonight=tonight.filter(t=>!(t.name===name&&t.cls===cls));
-      if(!fromCalendar){
-        Object.keys(tasks).forEach(day=>{
-          if(tasks[day][cls]){
-            const ul=document.getElementById(`${day}-${cls}`);
-            if(!ul)return;
-            Array.from(ul.querySelectorAll('li')).forEach(li=>{
-              if(li.querySelector('span').textContent===name){
-                li.querySelector('input[type="checkbox"]').checked=false;
-              }
-            });
-          }
-        });
-      }
+    function removeTonight(name, cls){
+      tonight = tonight.filter(t=>!(t.name===name && t.cls===cls));
       renderTonight();
     }
 
@@ -223,9 +210,10 @@
         cb.type='checkbox';
         cb.checked=t.done;
         cb.onchange=()=>{t.done=!t.done;renderTonight();};
+
         const span=document.createElement('span');
-        span.textContent=`[${t.cls}] ${t.name}`;
-        if(t.done)span.className='line-through text-gray-500';
+        span.innerHTML=`<span class="${subjectColors[t.cls]}">[${t.cls}]</span> ${t.name}`;
+        if(t.done)span.classList.add('line-through','text-gray-500');
         left.append(cb,span);
 
         const right=document.createElement('div');
@@ -237,12 +225,11 @@
         right.append('⏱',inp,'mins');
 
         const del=document.createElement('button');
-        del.textContent='✖';
-        del.className='text-red-500 hover:text-red-400';
-        del.onclick=()=>removeTonight(t.name,t.cls);
-        right.appendChild(del);
+        del.textContent='❌';
+        del.className='ml-2 text-red-500 hover:text-red-400';
+        del.onclick=()=>{ removeTonight(t.name, t.cls); renderTasks(); };
 
-        li.append(left,right);
+        li.append(left,right,del);
         list.appendChild(li);
       });
 
@@ -250,20 +237,19 @@
         const newOrder=[];
         list.querySelectorAll('li').forEach(li=>{
           const text=li.querySelector('span').textContent;
-          const match=text.match(/^\[(.*?)\] (.*)$/);
+          const match=text.match(/\[(.*?)\]\s(.*)/);
           if(match){
-            const cls=match[1], name=match[2];
-            const task=tonight.find(t=>t.name===name&&t.cls===cls);
+            const subj=match[1];
+            const name=match[2];
+            const task=tonight.find(t=>t.name===name && t.cls===subj);
             if(task)newOrder.push(task);
           }
         });
         tonight=newOrder;
       }});
 
-      document.getElementById('todo-count').textContent=tonight.filter(t=>!t.done).length;
-      document.getElementById('done-count').textContent=tonight.filter(t=>t.done).length;
-      document.getElementById('todo-time').textContent=tonight.filter(t=>!t.done).reduce((sum,t)=>sum+t.time,0);
-      document.getElementById('done-time').textContent=tonight.filter(t=>t.done).reduce((sum,t)=>sum+t.time,0);
+      document.getElementById('todo-count').textContent=tonight.filter(t=>!t.done).length+" ("+tonight.filter(t=>!t.done).reduce((a,c)=>a+c.time,0)+" mins)";
+      document.getElementById('done-count').textContent=tonight.filter(t=>t.done).length+" ("+tonight.filter(t=>t.done).reduce((a,c)=>a+c.time,0)+" mins)";
     }
 
     function generateSchedule(){
@@ -275,6 +261,7 @@
       let current=new Date();
       const [h,m]=start.split(':').map(Number);
       current.setHours(h,m,0,0);
+      current=new Date(current.getTime()+totalBreakMs);
       const schedule=document.getElementById('schedule-list');
       schedule.innerHTML='';
       tonight.filter(t=>!t.done).forEach(t=>{
@@ -282,45 +269,50 @@
         const li=document.createElement('li');
         li.className='bg-gray-800 p-2 rounded-lg fade-enter';
         setTimeout(()=>li.classList.remove('fade-enter'),10);
-        li.innerHTML=`<p class='font-semibold'>[${t.cls}] ${t.name}</p><p class='text-sm text-gray-400'>${current.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>`;
+        li.innerHTML=`<p class='font-semibold'><span class="${subjectColors[t.cls]}">[${t.cls}]</span> ${t.name}</p><p class='text-sm text-gray-400'>${current.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>`;
         schedule.appendChild(li);
         current=end;
       });
     }
 
-    // Break functionality
-    document.getElementById('start-break').onclick=()=>{
-      if(breakStart)return;
-      breakStart=new Date();
-      document.getElementById('break-timer').textContent='00:00';
-      breakInterval=setInterval(()=>{
-        const diff=new Date()-breakStart;
-        const mins=Math.floor(diff/60000);
-        const secs=Math.floor((diff%60000)/1000);
-        document.getElementById('break-timer').textContent=`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-      },1000);
-    };
-
-    document.getElementById('end-break').onclick=()=>{
-      if(!breakStart)return;
-      clearInterval(breakInterval);
-      const diff=new Date()-breakStart;
-      breakStart=null;
-      totalBreakDelay+=diff;
-      document.getElementById('schedule-delay').textContent=`Schedule delayed by ${Math.round(totalBreakDelay/60000)} minutes.`;
-      generateSchedule();
-    };
+    function toggleBreak(){
+      const btn=document.getElementById('break-btn');
+      const timer=document.getElementById('break-timer');
+      const msg=document.getElementById('break-delay-msg');
+      if(!inBreak){
+        inBreak=true;
+        breakStart=new Date();
+        btn.textContent='End Break';
+        btn.classList.remove('bg-green-600');
+        btn.classList.add('bg-red-600');
+        const interval=setInterval(()=>{
+          if(!inBreak){ clearInterval(interval); return; }
+          const elapsed=new Date()-breakStart;
+          timer.textContent=`Break: ${Math.floor(elapsed/60000)}m ${Math.floor((elapsed%60000)/1000)}s`;
+        },1000);
+      } else {
+        inBreak=false;
+        const elapsed=new Date()-breakStart;
+        totalBreakMs+=elapsed;
+        btn.textContent='Start Break';
+        btn.classList.remove('bg-red-600');
+        btn.classList.add('bg-green-600');
+        timer.textContent='';
+        msg.textContent=`Schedule delayed by ${Math.floor(totalBreakMs/60000)} minutes.`;
+      }
+    }
 
     document.getElementById('prev-week').onclick=()=>{weekStart.setDate(weekStart.getDate()-7);renderWeek();};
     document.getElementById('next-week').onclick=()=>{weekStart.setDate(weekStart.getDate()+7);renderWeek();};
     document.getElementById('add-custom').onclick=()=>{
       const val=document.getElementById('custom-task-input').value.trim();
-      if(val){addTonight(val,"Custom",today);document.getElementById('custom-task-input').value='';}
+      if(val){addTonight(val,"Custom");document.getElementById('custom-task-input').value='';}
     };
     document.getElementById('current-time').onclick=()=>{
       document.getElementById('schedule-start-time-input').value=new Date().toTimeString().slice(0,5);
     };
     document.getElementById('generate-schedule').onclick=generateSchedule;
+    document.getElementById('break-btn').onclick=toggleBreak;
 
     renderWeek();
   </script>
