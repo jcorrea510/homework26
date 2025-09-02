@@ -6,70 +6,95 @@
   <title>Homework Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <!-- Google Fonts for a modern, sleek look -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
-    .fade-enter { opacity: 0; transform: translateY(10px); }
-    .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
-    .subject-Math { color: #ef4444; }     /* red */
-    .subject-English { color: #eab308; }  /* yellow */
-    .subject-Spanish { color: #a855f7; }  /* purple */
-    .subject-Comp\\ Sci { color: #3b82f6; }/* blue */
-    .subject-HOTA { color: #f97316; }     /* orange */
-    .subject-Physics { color: #22c55e; }  /* green */
+    /* Keyframe animation for a subtle fade-in effect on new elements */
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fade-in 0.5s ease-out forwards; }
+    
+    /* Subject-specific color classes are no longer in custom CSS and will use Tailwind classes directly */
+
+    /* Custom scrollbar for a sleek design */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-thumb {
+      background-color: #4b5563;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-track { background-color: #1f2937; }
   </style>
 </head>
-<body class="bg-gray-950 text-white min-h-screen p-6">
+<body class="bg-gray-950 text-white min-h-screen p-6 md:p-12">
   <div class="max-w-7xl mx-auto">
-    <header class="text-center mb-8">
-      <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400">Homework Tracker</h1>
-      <p class="text-gray-400">Organize tasks, plan tonight, and auto-schedule.</p>
+    <!-- Header with a clean, modern design -->
+    <header class="text-center mb-10">
+      <h1 class="text-4xl md:text-6xl font-extrabold text-blue-400 drop-shadow-lg">Homework Hub</h1>
+      <p class="text-gray-400 text-lg mt-2 font-light">Organize tasks, plan your evening, and stay on top of your work.</p>
     </header>
 
     <!-- Week Navigation -->
-    <div class="flex justify-between items-center mb-6">
-      <button id="prev-week" class="px-3 py-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">◀</button>
-      <h2 id="week-label" class="text-2xl font-bold"></h2>
-      <button id="next-week" class="px-3 py-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">▶</button>
-    </div>
-
-    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-10"></div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <!-- Tonight Section -->
-      <div class="bg-gray-900 rounded-2xl p-6 shadow-xl">
-        <h2 class="text-2xl font-bold mb-4 text-center">Tonight</h2>
-        <ul id="tonight-list" class="space-y-2 mb-4"></ul>
-        <div class="flex gap-2 mb-6">
-          <input id="custom-task-input" type="text" placeholder="Custom task..." class="flex-1 bg-gray-700 p-2 rounded-lg">
-          <button id="add-custom" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition">Add</button>
+    <div class="flex flex-col md:flex-row justify-center items-center mb-8 gap-4">
+        <div class="flex items-center gap-4">
+            <button id="prev-week" class="px-4 py-3 bg-gray-800 rounded-full hover:bg-gray-700 transition transform hover:scale-105">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <h2 id="week-label" class="text-2xl font-bold text-center"></h2>
+            <button id="next-week" class="px-4 py-3 bg-gray-800 rounded-full hover:bg-gray-700 transition transform hover:scale-105">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
         </div>
-        <div class="mt-4 flex justify-between text-sm text-gray-400">
-          <p>To Do: <span id="todo-count">0</span></p>
-          <p>Done: <span id="done-count">0</span></p>
+    </div>
+    
+    <!-- Calendar Grid -->
+    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10"></div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+      <!-- Tonight Section -->
+      <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
+        <h2 class="text-3xl font-bold mb-6 text-center text-blue-300">Tonight</h2>
+        <ul id="tonight-list" class="space-y-4 mb-6"></ul>
+        <div class="flex gap-2">
+          <input id="custom-task-input" type="text" placeholder="Add a quick task..." class="flex-1 bg-gray-700/50 text-gray-200 placeholder-gray-500 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 transition"/>
+          <button id="add-custom" class="px-6 py-3 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 transition transform hover:scale-105">Add</button>
+        </div>
+        <div class="mt-4 flex justify-between text-sm text-gray-400 font-light">
+            <p>To Do: <span id="todo-count" class="font-medium text-white">0</span></p>
+            <p>Done: <span id="done-count" class="font-medium text-white">0</span></p>
         </div>
       </div>
-
+      
       <!-- Schedule Section -->
-      <div class="bg-gray-900 rounded-2xl p-6 shadow-xl">
-        <h2 class="text-2xl font-bold mb-4 text-center">Schedule</h2>
-        <div class="flex gap-2 mb-2 items-center">
-          <input type="time" id="schedule-start-time-input" class="p-2 bg-gray-700 rounded-lg">
-          <button id="current-time" class="px-2 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition">Current</button>
-        </div>
-        <button id="generate-schedule" class="w-full px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition mb-4">Create My Schedule</button>
+      <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
+        <h2 class="text-3xl font-bold mb-6 text-center text-purple-300">Schedule</h2>
         <div class="flex items-center gap-2 mb-4">
-          <button id="break-btn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-500 transition">Start Break</button>
-          <span id="break-timer" class="text-gray-400 text-sm"></span>
+          <label for="schedule-start-time-input" class="text-gray-400">Start Time:</label>
+          <input type="time" id="schedule-start-time-input" class="p-2 bg-gray-700/50 rounded-lg text-gray-200"/>
+          <button id="current-time" class="px-3 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition transform hover:scale-105">Current</button>
         </div>
-        <p id="break-delay-msg" class="text-sm text-gray-400 mb-2"></p>
-        <ul id="schedule-list" class="space-y-2"></ul>
+        <button id="generate-schedule" class="w-full px-4 py-3 bg-purple-600 rounded-xl font-semibold hover:bg-purple-500 transition transform hover:scale-105 mb-4">Create My Schedule</button>
+        
+        <ul id="schedule-list" class="space-y-4 mb-4"></ul>
+
+        <!-- Separate break button and timer for full width -->
+        <button id="break-btn" class="w-full px-4 py-3 bg-green-600 rounded-xl font-semibold hover:bg-green-500 transition transform hover:scale-105 mt-4">Start Break</button>
+        <div class="flex justify-center items-center mt-2">
+            <span id="break-timer" class="text-lg text-gray-400"></span>
+        </div>
+        <p id="break-delay-msg" class="text-sm text-center text-gray-400 mt-2"></p>
       </div>
     </div>
   </div>
 
   <script>
-    const classes = ["Math","English","Spanish","Comp Sci","HOTA","Physics"];
-    let today = new Date();
+    const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
     let weekStart = getStartOfWeek(new Date());
     let tasks = {};
     let tonight = [];
@@ -77,244 +102,310 @@
     let breakStart = null;
     let totalBreakMs = 0;
 
+    // Use a single, clean object to map subjects to Tailwind color classes
     const subjectColors = {
-      "Math": "subject-Math",
-      "English": "subject-English",
-      "Spanish": "subject-Spanish",
-      "Comp Sci": "subject-Comp Sci",
-      "HOTA": "subject-HOTA",
-      "Physics": "subject-Physics"
+      "Math": "text-red-400",
+      "English": "text-yellow-400",
+      "Spanish": "text-purple-400",
+      "Comp Sci": "text-blue-400",
+      "HOTA": "text-orange-400",
+      "Physics": "text-green-400"
     };
 
-    function getStartOfWeek(date){
-      const d=new Date(date);
-      const day=d.getDay();
-      const diff=d.getDate()-day+(day===0?-6:1);
+    function getStartOfWeek(date) {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
       return new Date(d.setDate(diff));
     }
 
-    function renderWeek(){
-      document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
-      const grid=document.getElementById('calendar-grid');
-      grid.innerHTML='';
-      for(let i=0;i<5;i++){
-        const day=new Date(weekStart);
-        day.setDate(weekStart.getDate()+i);
-        const card=document.createElement('div');
-        card.className='bg-gray-900 p-4 rounded-xl shadow-lg hover:shadow-2xl transition';
-        const title=document.createElement('h3');
-        title.className='text-xl font-semibold text-center mb-2';
-        title.textContent=day.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+    function renderWeek() {
+      document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+      const grid = document.getElementById('calendar-grid');
+      grid.innerHTML = '';
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const tomorrowDateString = tomorrow.toDateString();
+      
+      for (let i = 0; i < 5; i++) {
+        const day = new Date(weekStart);
+        day.setDate(weekStart.getDate() + i);
+        const card = document.createElement('div');
+        card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
+        const title = document.createElement('h3');
+        // Add whitespace-nowrap to prevent date from wrapping
+        title.className = 'text-xl font-semibold text-center mb-4 whitespace-nowrap';
+        title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
         card.appendChild(title);
-        classes.forEach(cls=>{
-          const section=document.createElement('div');
-          section.className='mb-3';
-          const label=document.createElement('p');
-          label.className='font-medium text-gray-300';
-          label.textContent=cls;
+        classes.forEach(cls => {
+          const section = document.createElement('div');
+          section.className = 'mb-3';
+          const label = document.createElement('p');
+          label.className = `font-medium text-gray-300 ${subjectColors[cls]}`;
+          label.textContent = cls;
           section.appendChild(label);
-          const input=document.createElement('input');
-          input.className='w-full bg-gray-700 p-2 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500';
-          input.placeholder='Add assignment...';
-          input.addEventListener('keydown',e=>{
-            if(e.key==='Enter'&&e.target.value.trim()!==''){
-              addTask(day,cls,e.target.value.trim());
-              const isTomorrow = day.getDate() === today.getDate()+1 && day.getMonth() === today.getMonth();
-              const isSundayToMonday = today.getDay()===0 && day.getDay()===1;
-              if(isTomorrow || isSundayToMonday){
-                addTonight(e.target.value.trim(), cls);
+          const input = document.createElement('input');
+          input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm';
+          input.placeholder = 'Add assignment...';
+          input.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && e.target.value.trim() !== '') {
+              const taskName = e.target.value.trim();
+              const taskData = { name: taskName, cls: cls };
+              
+              addTask(day, cls, taskName);
+              
+              // Add to Tonight list and check the box if it's due tomorrow
+              const isDueTomorrow = day.toDateString() === tomorrowDateString;
+              if (isDueTomorrow) {
+                addTonight(taskName, cls);
               }
-              e.target.value='';
+              
+              // Render the new element
+              const ul = document.getElementById(`${day.toDateString()}-${cls.replace(' ', '-')}`);
+              if (ul) {
+                const isChecked = isDueTomorrow || tonight.some(t => t.name === taskName && t.cls === cls);
+                addAndRenderTaskElement(ul, taskData, day, isChecked);
+              }
+
+              e.target.value = '';
             }
           });
           section.appendChild(input);
-          const ul=document.createElement('ul');
-          ul.id=`${day.toDateString()}-${cls}`;
-          ul.className='mt-2 space-y-1';
+          const ul = document.createElement('ul');
+          ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
+          ul.className = 'mt-2 space-y-2';
           section.appendChild(ul);
           card.appendChild(section);
         });
         grid.appendChild(card);
       }
-      renderTasks();
+      renderAllTasks();
     }
 
-    function addTask(day,cls,name){
-      const key=day.toDateString();
-      if(!tasks[key])tasks[key]={};
-      if(!tasks[key][cls])tasks[key][cls]=[];
+    function addTask(day, cls, name) {
+      const key = day.toDateString();
+      if (!tasks[key]) tasks[key] = {};
+      if (!tasks[key][cls]) tasks[key][cls] = [];
       tasks[key][cls].push(name);
-      renderTasks();
+    }
+    
+    function addAndRenderTaskElement(ul, taskData, day, isChecked) {
+      const li = document.createElement('li');
+      li.className = 'flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in';
+      li.innerHTML = `
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="form-checkbox text-blue-500 h-4 w-4 rounded" ${isChecked ? 'checked' : ''}>
+          <span class="${subjectColors[taskData.cls]}">${taskData.name}</span>
+        </div>
+        <button class="text-gray-500 hover:text-red-400 transition ml-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      `;
+      ul.appendChild(li);
+      // Add event listeners dynamically
+      const checkbox = li.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => toggleTonightTask(checkbox, taskData.name, taskData.cls));
+      const deleteBtn = li.querySelector('button');
+      deleteBtn.addEventListener('click', () => deleteTask(deleteBtn, day, taskData.cls, taskData.name));
     }
 
-    function renderTasks(){
-      Object.keys(tasks).forEach(day=>{
-        Object.keys(tasks[day]).forEach(cls=>{
-          const ul=document.getElementById(`${day}-${cls}`);
-          if(!ul)return;
-          ul.innerHTML='';
-          tasks[day][cls].forEach(t=>{
-            const li=document.createElement('li');
-            li.className='flex justify-between bg-gray-800 rounded-lg px-2 py-1 text-sm transition hover:bg-gray-700';
-            const left=document.createElement('div');
-            const cb=document.createElement('input');
-            cb.type='checkbox';
-            cb.onchange=()=>{
-              if(cb.checked){ addTonight(t, cls); }
-              else { removeTonight(t, cls); }
-            };
-            if(tonight.find(x=>x.name===t && x.cls===cls)) cb.checked=true;
-            const span=document.createElement('span');
-            span.textContent=t;
-            left.appendChild(cb);
-            left.appendChild(span);
 
-            const del=document.createElement('button');
-            del.textContent='❌';
-            del.className='ml-2 text-red-500 hover:text-red-400';
-            del.onclick=()=>{
-              tasks[day][cls]=tasks[day][cls].filter(x=>x!==t);
-              removeTonight(t, cls);
-              renderTasks();
-            };
-
-            li.append(left,del);
-            ul.appendChild(li);
+    function renderAllTasks() {
+      Object.keys(tasks).forEach(day => {
+        Object.keys(tasks[day]).forEach(cls => {
+          const ul = document.getElementById(`${day}-${cls.replace(' ', '-')}`);
+          if (!ul) return;
+          ul.innerHTML = '';
+          tasks[day][cls].forEach(t => {
+            const isChecked = tonight.find(x => x.name === t && x.cls === cls) !== undefined;
+            addAndRenderTaskElement(ul, { name: t, cls: cls }, day, isChecked);
           });
         });
       });
     }
 
-    function addTonight(name, cls){
-      if(tonight.find(t=>t.name===name && t.cls===cls))return;
-      tonight.push({id:crypto.randomUUID(),name,cls,time:30,done:false});
-      renderTonight();
-    }
-
-    function removeTonight(name, cls){
-      tonight = tonight.filter(t=>!(t.name===name && t.cls===cls));
-      renderTonight();
-    }
-
-    function renderTonight(){
-      const list=document.getElementById('tonight-list');
-      list.innerHTML='';
-      tonight.forEach(t=>{
-        const li=document.createElement('li');
-        li.className='flex justify-between items-center bg-gray-800 p-2 rounded-lg fade-enter';
-        setTimeout(()=>li.classList.remove('fade-enter'),10);
-
-        const left=document.createElement('div');
-        left.className='flex items-center gap-2';
-        const cb=document.createElement('input');
-        cb.type='checkbox';
-        cb.checked=t.done;
-        cb.onchange=()=>{t.done=!t.done;renderTonight();};
-
-        const span=document.createElement('span');
-        span.innerHTML=`<span class="${subjectColors[t.cls]}">[${t.cls}]</span> ${t.name}`;
-        if(t.done)span.classList.add('line-through','text-gray-500');
-        left.append(cb,span);
-
-        const right=document.createElement('div');
-        right.className='flex items-center gap-1';
-        const inp=document.createElement('input');
-        inp.type='number';inp.value=t.time;
-        inp.className='w-16 bg-gray-700 p-1 rounded text-center';
-        inp.onchange=e=>{t.time=parseInt(e.target.value)||30;};
-        right.append('⏱',inp,'mins');
-
-        const del=document.createElement('button');
-        del.textContent='❌';
-        del.className='ml-2 text-red-500 hover:text-red-400';
-        del.onclick=()=>{ removeTonight(t.name, t.cls); renderTasks(); };
-
-        li.append(left,right,del);
-        list.appendChild(li);
-      });
-
-      new Sortable(list, { animation: 150, onEnd: ()=>{
-        const newOrder=[];
-        list.querySelectorAll('li').forEach(li=>{
-          const text=li.querySelector('span').textContent;
-          const match=text.match(/\[(.*?)\]\s(.*)/);
-          if(match){
-            const subj=match[1];
-            const name=match[2];
-            const task=tonight.find(t=>t.name===name && t.cls===subj);
-            if(task)newOrder.push(task);
-          }
-        });
-        tonight=newOrder;
-      }});
-
-      document.getElementById('todo-count').textContent=tonight.filter(t=>!t.done).length+" ("+tonight.filter(t=>!t.done).reduce((a,c)=>a+c.time,0)+" mins)";
-      document.getElementById('done-count').textContent=tonight.filter(t=>t.done).length+" ("+tonight.filter(t=>t.done).reduce((a,c)=>a+c.time,0)+" mins)";
-    }
-
-    function generateSchedule(){
-      let start=document.getElementById('schedule-start-time-input').value;
-      if(!start){
-        const now=new Date();
-        start=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    function toggleTonightTask(checkbox, name, cls) {
+      if (checkbox.checked) {
+        addTonight(name, cls);
+      } else {
+        removeTonight(name, cls);
       }
-      let current=new Date();
-      const [h,m]=start.split(':').map(Number);
-      current.setHours(h,m,0,0);
-      current=new Date(current.getTime()+totalBreakMs);
-      const schedule=document.getElementById('schedule-list');
-      schedule.innerHTML='';
-      tonight.filter(t=>!t.done).forEach(t=>{
-        const end=new Date(current.getTime()+t.time*60000);
-        const li=document.createElement('li');
-        li.className='bg-gray-800 p-2 rounded-lg fade-enter';
-        setTimeout(()=>li.classList.remove('fade-enter'),10);
-        li.innerHTML=`<p class='font-semibold'><span class="${subjectColors[t.cls]}">[${t.cls}]</span> ${t.name}</p><p class='text-sm text-gray-400'>${current.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>`;
+    }
+
+    function deleteTask(button, day, cls, name) {
+      tasks[day][cls] = tasks[day][cls].filter(x => x !== name);
+      removeTonight(name, cls);
+      button.closest('li').classList.add('fade-out'); // Add a fade-out class for animation
+      setTimeout(() => button.closest('li').remove(), 300); // Remove after animation
+    }
+
+    function addTonight(name, cls) {
+      if (tonight.find(t => t.name === name && t.cls === cls)) return;
+      tonight.push({ id: crypto.randomUUID(), name, cls, time: 30, done: false });
+      renderTonight();
+    }
+
+    function removeTonight(name, cls) {
+      tonight = tonight.filter(t => !(t.name === name && t.cls === cls));
+      renderTonight();
+    }
+    
+    function removeTonightById(id) {
+        tonight = tonight.filter(t => t.id !== id);
+        renderTonight();
+    }
+
+    function toggleDone(id) {
+        const task = tonight.find(t => t.id === id);
+        if (task) {
+            task.done = !task.done;
+            renderTonight();
+            updateCounts();
+        }
+    }
+
+    function updateTime(id, value) {
+        const task = tonight.find(t => t.id === id);
+        if (task) {
+            task.time = parseInt(value) || 0;
+            updateCounts();
+        }
+    }
+    
+    function updateCounts() {
+      const totalToDo = tonight.filter(t => !t.done).length;
+      const totalDone = tonight.filter(t => t.done).length;
+      const totalTodoTime = tonight.filter(t => !t.done).reduce((a, c) => a + (c.time || 0), 0);
+      const totalDoneTime = tonight.filter(t => t.done).reduce((a, c) => a + (c.time || 0), 0);
+      document.getElementById('todo-count').textContent = `${totalToDo} (${totalTodoTime} mins)`;
+      document.getElementById('done-count').textContent = `${totalDone} (${totalDoneTime} mins)`;
+    }
+
+    function renderTonight() {
+      const list = document.getElementById('tonight-list');
+      list.innerHTML = '';
+      tonight.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between bg-gray-800 p-4 rounded-xl fade-in';
+        if (t.done) li.classList.add('opacity-50');
+
+        li.innerHTML = `
+          <div class="flex-1 flex items-center gap-3">
+            <input type="checkbox" class="form-checkbox h-5 w-5 rounded text-blue-500" ${t.done ? 'checked' : ''}>
+            <span class="text-base font-medium ${t.done ? 'line-through text-gray-400' : 'text-white'}">
+              <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
+            </span>
+          </div>
+          <div class="flex items-center gap-2 text-sm text-gray-400 font-light">
+            <input type="number" value="${t.time}" class="w-14 bg-gray-700/50 p-1 text-center rounded-lg focus:ring-2 focus:ring-blue-500">
+            <span>mins</span>
+            <button class="text-red-500 hover:text-red-400 transition ml-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" />
+                </svg>
+            </button>
+          </div>
+        `;
+        list.appendChild(li);
+
+        // Add event listeners dynamically
+        const checkbox = li.querySelector('input[type="checkbox"]');
+        checkbox.addEventListener('change', () => toggleDone(t.id));
+        const timeInput = li.querySelector('input[type="number"]');
+        timeInput.addEventListener('change', (e) => updateTime(t.id, e.target.value));
+        const deleteBtn = li.querySelector('button');
+        deleteBtn.addEventListener('click', () => removeTonightById(t.id));
+      });
+
+      new Sortable(list, {
+        animation: 150,
+        onEnd: (evt) => {
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
+          const [movedItem] = tonight.splice(oldIndex, 1);
+          tonight.splice(newIndex, 0, movedItem);
+          renderTonight(); // Re-render to update the DOM based on new order
+        }
+      });
+      updateCounts();
+    }
+
+    function generateSchedule() {
+      let start = document.getElementById('schedule-start-time-input').value;
+      if (!start) {
+        const now = new Date();
+        start = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      }
+      let current = new Date();
+      const [h, m] = start.split(':').map(Number);
+      current.setHours(h, m, 0, 0);
+      current = new Date(current.getTime() + totalBreakMs);
+      const schedule = document.getElementById('schedule-list');
+      schedule.innerHTML = '';
+      tonight.filter(t => !t.done).forEach(t => {
+        const end = new Date(current.getTime() + t.time * 60000);
+        const li = document.createElement('li');
+        li.className = 'bg-gray-800 p-4 rounded-xl shadow-md fade-in';
+        li.innerHTML = `
+          <p class="font-semibold text-lg">
+            <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
+          </p>
+          <p class="text-sm text-gray-400 mt-1">
+            <span class="font-medium">${current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span class="mx-2">—</span>
+            <span class="font-medium">${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </p>
+        `;
         schedule.appendChild(li);
-        current=end;
+        current = end;
       });
     }
 
-    function toggleBreak(){
-      const btn=document.getElementById('break-btn');
-      const timer=document.getElementById('break-timer');
-      const msg=document.getElementById('break-delay-msg');
-      if(!inBreak){
-        inBreak=true;
-        breakStart=new Date();
-        btn.textContent='End Break';
+    function toggleBreak() {
+      const btn = document.getElementById('break-btn');
+      const timer = document.getElementById('break-timer');
+      const msg = document.getElementById('break-delay-msg');
+      if (!inBreak) {
+        inBreak = true;
+        breakStart = new Date();
+        btn.textContent = 'End Break';
         btn.classList.remove('bg-green-600');
         btn.classList.add('bg-red-600');
-        const interval=setInterval(()=>{
-          if(!inBreak){ clearInterval(interval); return; }
-          const elapsed=new Date()-breakStart;
-          timer.textContent=`Break: ${Math.floor(elapsed/60000)}m ${Math.floor((elapsed%60000)/1000)}s`;
-        },1000);
+        const interval = setInterval(() => {
+          if (!inBreak) { clearInterval(interval); return; }
+          const elapsed = new Date() - breakStart;
+          timer.textContent = `${Math.floor(elapsed / 60000)}m ${Math.floor((elapsed % 60000) / 1000)}s`;
+        }, 1000);
       } else {
-        inBreak=false;
-        const elapsed=new Date()-breakStart;
-        totalBreakMs+=elapsed;
-        btn.textContent='Start Break';
+        inBreak = false;
+        const elapsed = new Date() - breakStart;
+        totalBreakMs += elapsed;
+        btn.textContent = 'Start Break';
         btn.classList.remove('bg-red-600');
         btn.classList.add('bg-green-600');
-        timer.textContent='';
-        msg.textContent=`Schedule delayed by ${Math.floor(totalBreakMs/60000)} minutes.`;
+        timer.textContent = '';
+        msg.textContent = `Schedule delayed by ${Math.floor(totalBreakMs / 60000)} minutes.`;
       }
     }
 
-    document.getElementById('prev-week').onclick=()=>{weekStart.setDate(weekStart.getDate()-7);renderWeek();};
-    document.getElementById('next-week').onclick=()=>{weekStart.setDate(weekStart.getDate()+7);renderWeek();};
-    document.getElementById('add-custom').onclick=()=>{
-      const val=document.getElementById('custom-task-input').value.trim();
-      if(val){addTonight(val,"Custom");document.getElementById('custom-task-input').value='';}
+    document.getElementById('prev-week').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); };
+    document.getElementById('next-week').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); };
+    document.getElementById('add-custom').onclick = () => {
+      const val = document.getElementById('custom-task-input').value.trim();
+      if (val) { addTonight(val, "Custom"); document.getElementById('custom-task-input').value = ''; }
     };
-    document.getElementById('current-time').onclick=()=>{
-      document.getElementById('schedule-start-time-input').value=new Date().toTimeString().slice(0,5);
+    document.getElementById('current-time').onclick = () => {
+      document.getElementById('schedule-start-time-input').value = new Date().toTimeString().slice(0, 5);
     };
-    document.getElementById('generate-schedule').onclick=generateSchedule;
-    document.getElementById('break-btn').onclick=toggleBreak;
-
+    document.getElementById('generate-schedule').onclick = generateSchedule;
+    document.getElementById('break-btn').onclick = toggleBreak;
+    
+    // Initial render
     renderWeek();
+    renderTonight();
   </script>
 </body>
 </html>
