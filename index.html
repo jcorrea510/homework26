@@ -207,7 +207,8 @@
                 const tasksRef = collection(db, tasksPath);
                 
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    tasks = {}; // Clear tasks on each update to rebuild from a clean state
+                    // CRITICAL FIX: Rebuild the tasks object from scratch
+                    tasks = {};
                     snapshot.docs.forEach(doc => {
                         const task = doc.data();
                         const key = task.date;
