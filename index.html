@@ -146,18 +146,17 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        setLogLevel('debug'); // Enable debug logging for Firestore
+        setLogLevel('debug');
 
         const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
         let weekStart = getStartOfWeek(new Date());
-        let tasks = {};
         let inBreak = false;
         let breakStart = null;
         let totalBreakMs = 0;
         let breakTimerInterval = null;
         let db, auth;
         let userId = null;
-        let unsubscribeTasks = () => {};
+        let tasksCache = {}; // Cache to hold tasks for quick reference
 
         const firebaseConfig = {
             apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
@@ -187,38 +186,185 @@
             "Physics": "text-green-400",
             "Custom": "text-pink-400"
         };
+        
+        // This function will handle all real-time UI updates
+        function handleTaskUpdates(changes) {
+            changes.forEach(change => {
+                const taskData = { id: change.doc.id, ...change.doc.data() };
+                const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
+                const tonightListEl = document.getElementById('tonight-list');
 
-        // Auth State Listener and Firestore Listener combined for reliability
+                if (change.type === 'added') {
+                    // Task added to Firestore
+                    tasksCache[taskData.id] = taskData;
+                    if (listEl) {
+                         const existingLi = listEl.querySelector(`li[data-id="${taskData.id}"]`);
+                         if (!existingLi) {
+                            listEl.appendChild(createTaskLi(taskData, 'calendar'));
+                         }
+                    }
+                    if (taskData.isTonight && tonightListEl) {
+                        const existingLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
+                        if (!existingLi) {
+                            tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                        }
+                    }
+                } else if (change.type === 'modified') {
+                    // Task modified in Firestore
+                    tasksCache[taskData.id] = taskData;
+                    const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
+                    if (calendarLi) {
+                         updateTaskLi(calendarLi, taskData, 'calendar');
+                    }
+                    const tonightLi = document.querySelector(`#tonight-list li[data-id="${taskData.id}"]`);
+                    if (tonightLi) {
+                        updateTaskLi(tonightLi, taskData, 'tonight');
+                    } else if (taskData.isTonight) {
+                         // If task is now marked "tonight" but not in the list, add it.
+                         tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                    }
+                } else if (change.type === 'removed') {
+                    // Task removed from Firestore
+                    delete tasksCache[taskData.id];
+                    const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
+                    if (calendarLi) {
+                         calendarLi.remove();
+                    }
+                    const tonightLi = document.querySelector(`#tonight-list li[data-id="${taskData.id}"]`);
+                    if (tonightLi) {
+                        tonightLi.remove();
+                    }
+                }
+            });
+            updateCounts();
+            generateSchedule();
+        }
+
+        function createTaskLi(taskData, type) {
+            const li = document.createElement('li');
+            li.dataset.id = taskData.id;
+            li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
+            
+            let content = '';
+
+            if (type === 'calendar') {
+                content = `
+                    <div class="flex items-center gap-2">
+                        <button class="tonight-checkbox-btn flex-shrink-0 w-6 h-6 rounded-md border-2 border-gray-500 text-transparent hover:border-blue-500 transition duration-200 ease-in-out flex items-center justify-center ${taskData.isTonight ? 'bg-blue-500 border-blue-500' : ''}">
+                            ${taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
+                        </button>
+                        <span class="${taskData.done ? 'line-through text-gray-400' : ''}">
+                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">${taskData.name}</span>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="completed-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${taskData.done ? 'bg-green-500 border-green-500' : ''}">
+                            ${taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
+                        </button>
+                        <button class="text-red-500 hover:text-red-400 transition delete-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                `;
+            } else { // type === 'tonight'
+                content = `
+                    <div class="flex-1 flex items-center gap-3">
+                        <button class="tonight-done-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${taskData.done ? 'bg-green-500 border-green-500' : ''}">
+                            ${taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
+                        </button>
+                        <span class="text-base font-medium ${taskData.done ? 'line-through text-gray-400' : 'text-white'}">
+                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">[${taskData.cls}]</span> ${taskData.name}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm text-gray-400 font-light">
+                        <input type="number" value="${taskData.time}" class="w-14 bg-gray-700/50 p-1 text-center rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <span>mins</span>
+                        <button class="text-gray-400 hover:text-white transition ml-2 tonight-remove-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            }
+
+            li.innerHTML = content;
+            
+            if (type === 'calendar') {
+                li.querySelector('.tonight-checkbox-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { isTonight: !taskData.isTonight }));
+                li.querySelector('.completed-checkbox-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { done: !taskData.done }));
+                li.querySelector('.delete-btn').addEventListener('click', () => deleteTaskFromDb(taskData.id));
+            } else { // 'tonight'
+                li.querySelector('.tonight-done-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { done: !taskData.done }));
+                li.querySelector('input[type="number"]').addEventListener('change', (e) => updateTaskInDb(taskData.id, { time: parseInt(e.target.value) || 0 }));
+                li.querySelector('.tonight-remove-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { isTonight: false }));
+            }
+            return li;
+        }
+
+        function updateTaskLi(li, taskData, type) {
+            li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 ${taskData.done ? 'opacity-50' : ''}`;
+            
+            if (type === 'calendar') {
+                const tonightBtn = li.querySelector('.tonight-checkbox-btn');
+                const completedBtn = li.querySelector('.completed-checkbox-btn');
+                const textSpan = li.querySelector('.flex-1 span, .flex.items-center.gap-2 span');
+                
+                tonightBtn.classList.toggle('bg-blue-500', taskData.isTonight);
+                tonightBtn.classList.toggle('border-blue-500', taskData.isTonight);
+                tonightBtn.innerHTML = taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+                
+                completedBtn.classList.toggle('bg-green-500', taskData.done);
+                completedBtn.classList.toggle('border-green-500', taskData.done);
+                completedBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+
+                if (taskData.done) {
+                    textSpan.classList.add('line-through', 'text-gray-400');
+                } else {
+                    textSpan.classList.remove('line-through', 'text-gray-400');
+                }
+
+            } else { // 'tonight'
+                const doneBtn = li.querySelector('.tonight-done-btn');
+                const textSpan = li.querySelector('.flex-1 span');
+                const timeInput = li.querySelector('input[type="number"]');
+
+                doneBtn.classList.toggle('bg-green-500', taskData.done);
+                doneBtn.classList.toggle('border-green-500', taskData.done);
+                doneBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+                
+                if (taskData.done) {
+                    textSpan.classList.add('line-through', 'text-gray-400');
+                    textSpan.classList.remove('text-white');
+                } else {
+                    textSpan.classList.remove('line-through', 'text-gray-400');
+                    textSpan.classList.add('text-white');
+                }
+
+                timeInput.value = taskData.time;
+            }
+        }
+        
         onAuthStateChanged(auth, async (user) => {
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
-            unsubscribeTasks(); // Unsubscribe from the previous listener
+            
             if (user) {
                 userId = user.uid;
                 authButton.textContent = 'Sign Out';
                 userInfo.textContent = `User ID: ${userId}`;
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
                 
-                const tasksPath = `artifacts/${appId}/users/${userId}/tasks`;
-                const tasksRef = collection(db, tasksPath);
+                const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
                 
-                unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    const tempTasks = {};
-                    snapshot.docs.forEach((doc) => {
-                        const taskData = doc.data();
-                        const key = taskData.date;
-                        const cls = taskData.cls;
+                // Clear UI on sign-in before re-rendering
+                document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
 
-                        if (!tempTasks[key]) tempTasks[key] = {};
-                        if (!tempTasks[key][cls]) tempTasks[key][cls] = [];
-
-                        tempTasks[key][cls].push({ id: doc.id, ...taskData });
+                onSnapshot(tasksRef, (snapshot) => {
+                    snapshot.docChanges().forEach(change => {
+                        handleTaskUpdates([change]);
                     });
-
-                    tasks = tempTasks;
-                    renderAllTasks();
-                    renderTonight();
-                    generateSchedule();
                 }, (error) => {
                     console.error("Error fetching tasks:", error);
                     showMessage("Failed to load your data from the database. Please try again later.");
@@ -228,9 +374,10 @@
                 authButton.textContent = 'Log In / Sign Up';
                 userInfo.textContent = 'Not signed in';
                 authButton.onclick = () => showAuthModal('login');
-                tasks = {};
-                renderAllTasks();
-                renderTonight();
+                document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
+                tasksCache = {};
+                updateCounts();
+                generateSchedule();
             }
         });
         
@@ -417,143 +564,16 @@
                 });
                 grid.appendChild(card);
             }
-            renderAllTasks();
         }
         
-        function addAndRenderTaskElement(ul, taskData) {
-            const li = document.createElement('li');
-            li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = "flex items-center gap-2";
-            
-            const tonightButton = document.createElement('button');
-            tonightButton.className = `tonight-checkbox-btn flex-shrink-0 w-6 h-6 rounded-md border-2 border-gray-500 text-transparent hover:border-blue-500 transition duration-200 ease-in-out flex items-center justify-center ${taskData.isTonight ? 'bg-blue-500 border-blue-500' : ''}`;
-            tonightButton.dataset.id = taskData.id;
-            if (taskData.isTonight) {
-                tonightButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
-            }
-            contentDiv.appendChild(tonightButton);
-
-            const spanText = document.createElement('span');
-            spanText.className = `${taskData.done ? 'line-through text-gray-400' : ''}`;
-            spanText.innerHTML = `<span class="${subjectColors[taskData.cls]} font-bold mr-1">${taskData.name}</span>`;
-            contentDiv.appendChild(spanText);
-
-            li.appendChild(contentDiv);
-
-            const buttonsDiv = document.createElement('div');
-            buttonsDiv.className = "flex items-center gap-2";
-
-            const completedButton = document.createElement('button');
-            completedButton.className = `completed-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${taskData.done ? 'bg-green-500 border-green-500' : ''}`;
-            completedButton.dataset.id = taskData.id;
-            if (taskData.done) {
-                completedButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
-            }
-            buttonsDiv.appendChild(completedButton);
-
-            const deleteButton = document.createElement('button');
-            deleteButton.className = "text-red-500 hover:text-red-400 transition delete-btn";
-            deleteButton.dataset.id = taskData.id;
-            deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" /></svg>`;
-            buttonsDiv.appendChild(deleteButton);
-            
-            li.appendChild(buttonsDiv);
-            ul.appendChild(li);
-
-            tonightButton.addEventListener('click', () => {
-                updateTaskInDb(taskData.id, { isTonight: !taskData.isTonight });
-            });
-            completedButton.addEventListener('click', () => {
-                updateTaskInDb(taskData.id, { done: !taskData.done });
-            });
-            deleteButton.addEventListener('click', () => {
-                deleteTaskFromDb(taskData.id);
-            });
-        }
-
-        function renderAllTasks() {
-            // Check if tasks is not an object or is empty before trying to iterate
-            if (!tasks || Object.keys(tasks).length === 0) {
-                 // Clear all task lists
-                document.querySelectorAll('#calendar-grid ul').forEach(ul => ul.innerHTML = '');
-                return; // Exit early if there's nothing to render
-            }
-
-            Object.keys(tasks).forEach(day => {
-                Object.keys(tasks[day]).forEach(cls => {
-                    const ul = document.getElementById(`${day}-${cls.replace(' ', '-')}`);
-                    if (!ul) return;
-                    ul.innerHTML = '';
-                    
-                    const dayTasks = tasks[day][cls] || [];
-                    dayTasks.forEach(t => {
-                        addAndRenderTaskElement(ul, t);
-                    });
-                });
-            });
-        }
-
         function updateCounts() {
-            const tonightTasks = Object.values(tasks).flatMap(obj => Object.values(obj).flatMap(arr => arr.filter(t => t.isTonight)));
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
             const totalToDo = tonightTasks.filter(t => !t.done).length;
             const totalDone = tonightTasks.filter(t => t.done).length;
             const totalTodoTime = tonightTasks.filter(t => !t.done).reduce((a, c) => a + (c.time || 0), 0);
             const totalDoneTime = tonightTasks.filter(t => t.done).reduce((a, c) => a + (c.time || 0), 0);
             document.getElementById('todo-count').textContent = `${totalToDo} (${totalTodoTime} mins)`;
             document.getElementById('done-count').textContent = `${totalDone} (${totalDoneTime} mins)`;
-        }
-
-        function renderTonight() {
-            const tonightTasks = Object.values(tasks).flatMap(obj => Object.values(obj).flatMap(arr => arr.filter(t => t.isTonight)));
-            const list = document.getElementById('tonight-list');
-            list.innerHTML = '';
-            tonightTasks.forEach(t => {
-                const li = document.createElement('li');
-                li.className = 'flex items-center justify-between bg-gray-800 p-4 rounded-xl fade-in';
-                if (t.done) li.classList.add('opacity-50');
-
-                li.innerHTML = `
-                    <div class="flex-1 flex items-center gap-3">
-                        <button class="tonight-done-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.done ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
-                            ${t.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
-                        </button>
-                        <span class="text-base font-medium ${t.done ? 'line-through text-gray-400' : 'text-white'}">
-                            <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm text-gray-400 font-light">
-                        <input type="number" value="${t.time}" class="w-14 bg-gray-700/50 p-1 text-center rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <span>mins</span>
-                        <button class="text-gray-400 hover:text-white transition ml-2 tonight-remove-btn" data-id="${t.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
-                `;
-                list.appendChild(li);
-
-                li.querySelector('.tonight-done-btn').addEventListener('click', () => {
-                    updateTaskInDb(t.id, { done: !t.done });
-                });
-                li.querySelector('input[type="number"]').addEventListener('change', (e) => {
-                    updateTaskInDb(t.id, { time: parseInt(e.target.value) || 0 });
-                });
-                li.querySelector('.tonight-remove-btn').addEventListener('click', () => {
-                    updateTaskInDb(t.id, { isTonight: false });
-                });
-            });
-
-            new Sortable(list, {
-                animation: 150,
-                onEnd: (evt) => {
-                    // This can be used later to update the order in Firestore if needed.
-                }
-            });
-            updateCounts();
         }
 
         function generateSchedule() {
@@ -568,7 +588,7 @@
             current = new Date(current.getTime() + totalBreakMs);
             const schedule = document.getElementById('schedule-list');
             schedule.innerHTML = '';
-            const tonightTasks = Object.values(tasks).flatMap(obj => Object.values(obj).flatMap(arr => arr.filter(t => t.isTonight)));
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
             
             tonightTasks.forEach(t => {
                 const end = new Date(current.getTime() + t.time * 60000);
