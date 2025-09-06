@@ -276,6 +276,9 @@
             try {
                 const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
                 await deleteDoc(taskDocRef);
+                // Force a re-render to ensure immediate UI update
+                renderAllTasks();
+                renderTonight();
             } catch (error) {
                 console.error("Error deleting task:", error);
                 showMessage("Failed to delete task. Please check the console for details.");
