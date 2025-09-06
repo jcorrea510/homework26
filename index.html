@@ -167,7 +167,9 @@
         let db, auth;
         let userId = null;
         let tasksCache = {};
+        let currentScheduleData = [];
         let unsubscribeTasks = null;
+        let unsubscribeSchedule = null;
         let sortableTonight = null;
 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
@@ -292,7 +294,6 @@
         function renderAll() {
             renderWeek();
             renderTonightList();
-            generateSchedule();
             updateCounts();
         }
 
@@ -380,7 +381,49 @@
             document.getElementById('done-count').textContent = `${totalDone} (${totalDoneTime} mins)`;
         }
 
-        function generateSchedule() {
+        function renderSchedule() {
+            const schedule = document.getElementById('schedule-list');
+            schedule.innerHTML = '';
+
+            currentScheduleData.forEach(t => {
+                const li = document.createElement('li');
+                li.dataset.id = t.id;
+                li.className = `bg-gray-800 p-4 rounded-xl shadow-md fade-in`;
+                li.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <button class="schedule-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.checked ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
+                            ${t.checked ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
+                        </button>
+                        <div>
+                            <p class="font-semibold text-lg ${t.checked ? 'line-through text-gray-400' : 'text-white'}">
+                                <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
+                            </p>
+                            <p class="text-sm text-gray-400 mt-1">
+                                <span class="font-medium">${t.start}</span>
+                                <span class="mx-2">—</span>
+                                <span class="font-medium">${t.end}</span>
+                            </p>
+                        </div>
+                    </div>
+                `;
+                li.querySelector('.schedule-checkbox-btn').addEventListener('click', () => {
+                    const taskIndex = currentScheduleData.findIndex(task => task.id === t.id);
+                    if (taskIndex > -1) {
+                        const updatedScheduleData = [...currentScheduleData];
+                        updatedScheduleData[taskIndex].checked = !updatedScheduleData[taskIndex].checked;
+                        saveScheduleToDb(updatedScheduleData);
+                    }
+                });
+                schedule.appendChild(li);
+            });
+        }
+
+        async function createAndSaveSchedule() {
+            if (!userId || !db) {
+                showMessage("Please log in to create a schedule.");
+                return;
+            }
+
             let start = document.getElementById('schedule-start-time-input').value;
             if (!start) {
                 const now = new Date();
@@ -390,40 +433,34 @@
             const [h, m] = start.split(':').map(Number);
             current.setHours(h, m, 0, 0);
             current = new Date(current.getTime() + totalBreakMs);
-            const schedule = document.getElementById('schedule-list');
-            schedule.innerHTML = '';
-            // Only include tonight's tasks that are not yet done
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
-            tonightTasks.forEach(t => {
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+            const newSchedule = tonightTasks.map(t => {
                 const end = new Date(current.getTime() + t.time * 60000);
-                const li = document.createElement('li');
-                li.dataset.id = t.id;
-                li.className = `bg-gray-800 p-4 rounded-xl shadow-md fade-in`;
-                li.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <button class="schedule-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.done ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
-                            ${t.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
-                        </button>
-                        <div>
-                            <p class="font-semibold text-lg ${t.done ? 'line-through text-gray-400' : 'text-white'}">
-                                <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
-                            </p>
-                            <p class="text-sm text-gray-400 mt-1">
-                                <span class="font-medium">${current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                <span class="mx-2">—</span>
-                                <span class="font-medium">${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            </p>
-                        </div>
-                    </div>
-                `;
-                const checkboxBtn = li.querySelector('.schedule-checkbox-btn');
-                checkboxBtn.addEventListener('click', () => {
-                    updateTaskInDb(t.id, { done: !t.done });
-                });
-                schedule.appendChild(li);
+                const task = {
+                    id: t.id,
+                    name: t.name,
+                    cls: t.cls,
+                    start: current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    end: end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    checked: false
+                };
                 current = end;
+                return task;
             });
+            await saveScheduleToDb(newSchedule);
+        }
+
+        async function saveScheduleToDb(scheduleData) {
+            if (!userId || !db) return;
+            try {
+                const scheduleDocRef = doc(db, `artifacts/${appId}/users/${userId}/data/schedule`);
+                await setDoc(scheduleDocRef, { tasks: scheduleData });
+            } catch (error) {
+                console.error("Error saving schedule:", error);
+                showMessage("Failed to save schedule. Please check the console for details.");
+            }
         }
 
         onAuthStateChanged(auth, async (user) => {
@@ -439,6 +476,9 @@
                 if (unsubscribeTasks) {
                     unsubscribeTasks();
                 }
+                if (unsubscribeSchedule) {
+                    unsubscribeSchedule();
+                }
 
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
@@ -452,6 +492,20 @@
                     console.error("Error fetching tasks:", error);
                     showMessage("Failed to load your data from the database. Please try again later.");
                 });
+
+                const scheduleDocRef = doc(db, `artifacts/${appId}/users/${userId}/data/schedule`);
+                unsubscribeSchedule = onSnapshot(scheduleDocRef, (docSnapshot) => {
+                    if (docSnapshot.exists()) {
+                        currentScheduleData = docSnapshot.data().tasks || [];
+                    } else {
+                        currentScheduleData = [];
+                    }
+                    renderSchedule();
+                }, (error) => {
+                    console.error("Error fetching schedule:", error);
+                    showMessage("Failed to load your schedule from the database.");
+                });
+
             } else {
                 try {
                     if (initialAuthToken) {
@@ -467,11 +521,16 @@
                     authButton.onclick = () => showAuthModal('login');
                     document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
                     tasksCache = {};
+                    currentScheduleData = [];
+                    renderSchedule();
                     updateCounts();
-                    document.getElementById('schedule-list').innerHTML = '';
                     if (unsubscribeTasks) {
                         unsubscribeTasks();
                         unsubscribeTasks = null;
+                    }
+                    if (unsubscribeSchedule) {
+                        unsubscribeSchedule();
+                        unsubscribeSchedule = null;
                     }
                 }
             }
@@ -671,7 +730,7 @@
         document.getElementById('current-time').onclick = () => {
             document.getElementById('schedule-start-time-input').value = new Date().toTimeString().slice(0, 5);
         };
-        document.getElementById('generate-schedule').onclick = generateSchedule;
+        document.getElementById('generate-schedule').onclick = createAndSaveSchedule;
         document.getElementById('break-btn').onclick = toggleBreak;
 
         renderWeek();
