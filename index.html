@@ -45,13 +45,13 @@
             min-width: 300px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
         }
-        
+
         .sortable-ghost {
             background-color: rgba(75, 85, 99, 0.5) !important;
             border-radius: 1rem;
             opacity: 0.7;
         }
-        
+
         .sortable-drag {
             opacity: 0 !important;
         }
@@ -87,10 +87,10 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Calendar Grid -->
         <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10"></div>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <!-- Tonight Section -->
             <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
@@ -105,7 +105,7 @@
                     <p>Done: <span id="done-count" class="font-medium text-white">0</span></p>
                 </div>
             </div>
-            
+
             <!-- Schedule Section -->
             <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
                 <h2 class="text-3xl font-bold mb-6 text-center text-purple-300">Schedule</h2>
@@ -115,7 +115,7 @@
                     <button id="current-time" class="px-3 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition transform hover:scale-105">Current</button>
                 </div>
                 <button id="generate-schedule" class="w-full px-4 py-3 bg-purple-600 rounded-xl font-semibold hover:bg-purple-500 transition transform hover:scale-105 mb-4">Create My Schedule</button>
-                
+
                 <ul id="schedule-list" class="space-y-4 mb-4"></ul>
 
                 <!-- Separate break button and timer for full width -->
@@ -168,9 +168,9 @@
         let userId = null;
         let tasksCache = {};
         let unsubscribeTasks = null;
-        let scheduleHtmlCache = "";
-        
-        const firebaseConfig = {
+        let sortableTonight = null;
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
             authDomain: "thelog26hw.firebaseapp.com",
             projectId: "thelog26hw",
@@ -178,7 +178,8 @@
             messagingSenderId: "884261460141",
             appId: "1:884261460141:web:dd3cceeca0c330f257ce24"
         };
-        const appId = "thelog26hw";
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         try {
             const app = initializeApp(firebaseConfig);
@@ -188,21 +189,26 @@
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
         }
-        
-        // Initialize Sortable.js on the Tonight list
+
         const tonightList = document.getElementById('tonight-list');
-        const sortableTonight = new Sortable(tonightList, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onSort: function (evt) {
-                if (!userId) {
-                    showMessage("Please log in to reorder tasks.");
-                    return;
-                }
-                const newOrder = Array.from(evt.to.children).map(item => item.dataset.id);
-                updateTaskOrderInDb(newOrder);
-            },
-        });
+
+        function initializeSortable() {
+             if (sortableTonight) {
+                 sortableTonight.destroy();
+             }
+             sortableTonight = new Sortable(tonightList, {
+                 animation: 150,
+                 ghostClass: 'sortable-ghost',
+                 onSort: function (evt) {
+                     if (!userId) {
+                         showMessage("Please log in to reorder tasks.");
+                         return;
+                     }
+                     const newOrder = Array.from(evt.to.children).map(item => item.dataset.id);
+                     updateTaskOrderInDb(newOrder);
+                 },
+             });
+        }
 
         const subjectColors = {
             "Math": "text-red-400",
@@ -213,12 +219,12 @@
             "Physics": "text-green-400",
             "Custom": "text-pink-400"
         };
-        
+
         function createTaskLi(taskData, type) {
             const li = document.createElement('li');
             li.dataset.id = taskData.id;
             li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
-            
+
             let content = '';
             if (type === 'calendar') {
                 content = `
@@ -246,7 +252,7 @@
                             ${taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
                         </button>
                         <span class="text-base font-medium ${taskData.done ? 'line-through text-gray-400' : 'text-white'}">
-                            <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
+                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">[${taskData.cls}]</span> ${taskData.name}
                         </span>
                     </div>
                     <div class="flex items-center gap-2 text-sm text-gray-400 font-light">
@@ -263,29 +269,107 @@
             }
 
             li.innerHTML = content;
-            
-            // Add event listeners for the new LI element
+
+            // Add event listeners
             if (type === 'calendar') {
                 li.querySelector('.tonight-checkbox-btn').addEventListener('click', () => {
-                    const currentTask = tasksCache[taskData.id];
-                    updateTaskInDb(taskData.id, { isTonight: !currentTask.isTonight, orderIndex: Date.now() });
+                    updateTaskInDb(taskData.id, { isTonight: !taskData.isTonight, orderIndex: Date.now() });
                 });
                 li.querySelector('.completed-checkbox-btn').addEventListener('click', () => {
-                    const currentTask = tasksCache[taskData.id];
-                    updateTaskInDb(taskData.id, { done: !currentTask.done });
+                    updateTaskInDb(taskData.id, { done: !taskData.done });
                 });
                 li.querySelector('.delete-btn').addEventListener('click', () => deleteTaskFromDb(taskData.id));
             } else { // 'tonight'
                 li.querySelector('.tonight-done-btn').addEventListener('click', () => {
-                    const currentTask = tasksCache[taskData.id];
-                    updateTaskInDb(taskData.id, { done: !currentTask.done });
+                    updateTaskInDb(taskData.id, { done: !taskData.done });
                 });
                 li.querySelector('input[type="number"]').addEventListener('change', (e) => updateTaskInDb(taskData.id, { time: parseInt(e.target.value) || 0 }));
                 li.querySelector('.tonight-remove-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { isTonight: false }));
             }
             return li;
         }
-        
+
+        function renderAll() {
+            renderWeek();
+            renderTonightList();
+            generateSchedule();
+            updateCounts();
+        }
+
+        function renderWeek() {
+            document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = ''; // Clear and rebuild calendar grid structure
+
+            for (let i = 0; i < 5; i++) {
+                const day = new Date(weekStart);
+                day.setDate(weekStart.getDate() + i);
+                const card = document.createElement('div');
+                card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
+                const title = document.createElement('h3');
+                title.className = 'text-xl font-semibold text-center mb-4 whitespace-nowrap';
+                title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+                card.appendChild(title);
+
+                classes.forEach(cls => {
+                    const section = document.createElement('div');
+                    section.className = 'mb-3';
+                    const label = document.createElement('p');
+                    label.className = `font-medium ${subjectColors[cls]}`;
+                    label.textContent = cls;
+                    section.appendChild(label);
+
+                    const input = document.createElement('input');
+                    input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
+                    input.placeholder = 'Add assignment...';
+                    input.dataset.date = day.toDateString();
+                    input.dataset.class = cls;
+                    input.addEventListener('keydown', e => {
+                        if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                            const taskName = e.target.value.trim();
+                            const date = e.target.dataset.date;
+                            const cls = e.target.dataset.class;
+                            const taskId = crypto.randomUUID();
+                            const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
+                            const isDueNextSchoolDay = date === nextSchoolDay;
+                            const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: date, orderIndex: Date.now() };
+
+                            addTaskToDb(taskData);
+                            e.target.value = '';
+                        }
+                    });
+
+                    const ul = document.createElement('ul');
+                    ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
+                    ul.className = 'mt-2 space-y-2';
+
+                    section.appendChild(input);
+                    section.appendChild(ul);
+                    card.appendChild(section);
+                });
+                grid.appendChild(card);
+            }
+
+            // Populate the calendar lists with the cached tasks
+            Object.values(tasksCache).forEach(taskData => {
+                try {
+                    const listEl = document.getElementById(`${new Date(taskData.date).toDateString()}-${taskData.cls.replace(' ', '-')}`);
+                    if (listEl) {
+                        listEl.appendChild(createTaskLi(taskData, 'calendar'));
+                    }
+                } catch (e) {
+                    // Task date not in current week view, so we skip it. This is expected.
+                }
+            });
+        }
+
+        function renderTonightList() {
+            tonightList.innerHTML = '';
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+            tonightTasks.forEach(t => tonightList.appendChild(createTaskLi(t, 'tonight')));
+            initializeSortable();
+        }
+
         function updateCounts() {
             const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
             const totalToDo = tonightTasks.filter(t => !t.done).length;
@@ -309,8 +393,8 @@
             const schedule = document.getElementById('schedule-list');
             schedule.innerHTML = '';
             // Only include tonight's tasks that are not yet done
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done).sort((a, b) => a.orderIndex - b.orderIndex);
-            
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
             tonightTasks.forEach(t => {
                 const end = new Date(current.getTime() + t.time * 60000);
                 const li = document.createElement('li');
@@ -341,75 +425,58 @@
                 current = end;
             });
         }
-        
+
         onAuthStateChanged(auth, async (user) => {
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
-            
+
             if (user) {
                 userId = user.uid;
                 authButton.textContent = 'Sign Out';
                 userInfo.textContent = `User ID: ${userId}`;
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
-                
+
                 if (unsubscribeTasks) {
                     unsubscribeTasks();
                 }
 
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
-                
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    // Cache all tasks
                     tasksCache = {};
                     snapshot.docs.forEach(doc => {
                         const taskData = { id: doc.id, ...doc.data() };
                         tasksCache[taskData.id] = taskData;
                     });
-                    
-                    // Clear and re-render the entire calendar grid
-                    const calendarGridEl = document.getElementById('calendar-grid');
-                    calendarGridEl.innerHTML = '';
-                    renderWeek();
-
-                    // Re-render the Tonight list from scratch
-                    const tonightListEl = document.getElementById('tonight-list');
-                    tonightListEl.innerHTML = '';
-                    const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
-                    tonightTasks.forEach(t => tonightListEl.appendChild(createTaskLi(t, 'tonight')));
-                    
-                    // Populate the calendar lists with the cached tasks
-                    Object.values(tasksCache).forEach(taskData => {
-                        try {
-                            const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
-                            if (listEl) {
-                                listEl.appendChild(createTaskLi(taskData, 'calendar'));
-                            }
-                        } catch (e) {
-                            console.log("Task date not in current week view, skipping calendar render.", taskData.date);
-                        }
-                    });
-
-                    updateCounts();
+                    renderAll();
                 }, (error) => {
                     console.error("Error fetching tasks:", error);
                     showMessage("Failed to load your data from the database. Please try again later.");
                 });
             } else {
-                userId = null;
-                authButton.textContent = 'Log In / Sign Up';
-                userInfo.textContent = 'Not signed in';
-                authButton.onclick = () => showAuthModal('login');
-                document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
-                tasksCache = {};
-                updateCounts();
-                document.getElementById('schedule-list').innerHTML = '';
-                if (unsubscribeTasks) {
-                    unsubscribeTasks();
-                    unsubscribeTasks = null;
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase auth error:", error);
+                    userId = null;
+                    authButton.textContent = 'Log In / Sign Up';
+                    userInfo.textContent = 'Not signed in';
+                    authButton.onclick = () => showAuthModal('login');
+                    document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
+                    tasksCache = {};
+                    updateCounts();
+                    document.getElementById('schedule-list').innerHTML = '';
+                    if (unsubscribeTasks) {
+                        unsubscribeTasks();
+                        unsubscribeTasks = null;
+                    }
                 }
             }
         });
-        
+
         async function addTaskToDb(taskData) {
             if (!userId || !db) {
                 showMessage("Please log in to add tasks.");
@@ -417,8 +484,7 @@
             }
             try {
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
-                const newOrderIndex = Date.now();
-                await setDoc(doc(tasksRef, taskData.id), {...taskData, orderIndex: newOrderIndex});
+                await setDoc(doc(tasksRef, taskData.id), {...taskData});
             } catch (error) {
                 console.error("Error adding task:", error);
                 showMessage("Failed to add task. Please check the console for details.");
@@ -446,12 +512,12 @@
             }
             const batch = writeBatch(db);
             const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
-            
+
             newOrder.forEach((taskId, index) => {
                 const taskRef = doc(tasksRef, taskId);
                 batch.update(taskRef, { orderIndex: index });
             });
-            
+
             try {
                 await batch.commit();
             } catch (error) {
@@ -545,7 +611,7 @@
             const diff = d.getDate() - day + (day === 0 ? -6 : 1);
             return new Date(d.setDate(diff));
         }
-        
+
         function getNextSchoolDay(date) {
             const d = new Date(date);
             const dayOfWeek = d.getDay();
@@ -559,61 +625,6 @@
             return d;
         }
 
-        function renderWeek() {
-            document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
-            const grid = document.getElementById('calendar-grid');
-            grid.innerHTML = '';
-            
-            for (let i = 0; i < 5; i++) {
-                const day = new Date(weekStart);
-                day.setDate(weekStart.getDate() + i);
-                const card = document.createElement('div');
-                card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
-                const title = document.createElement('h3');
-                title.className = 'text-xl font-semibold text-center mb-4 whitespace-nowrap';
-                title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-                card.appendChild(title);
-                
-                classes.forEach(cls => {
-                    const section = document.createElement('div');
-                    section.className = 'mb-3';
-                    const label = document.createElement('p');
-                    label.className = `font-medium ${subjectColors[cls]}`;
-                    label.textContent = cls;
-                    section.appendChild(label);
-                    
-                    const input = document.createElement('input');
-                    input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
-                    input.placeholder = 'Add assignment...';
-                    input.dataset.date = day.toDateString();
-                    input.dataset.class = cls;
-                    input.addEventListener('keydown', e => {
-                        if (e.key === 'Enter' && e.target.value.trim() !== '') {
-                            const taskName = e.target.value.trim();
-                            const date = e.target.dataset.date;
-                            const cls = e.target.dataset.class;
-                            const taskId = crypto.randomUUID();
-                            const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
-                            const isDueNextSchoolDay = date === nextSchoolDay;
-                            const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: date, orderIndex: Date.now() };
-                            
-                            addTaskToDb(taskData);
-                            e.target.value = '';
-                        }
-                    });
-                    
-                    const ul = document.createElement('ul');
-                    ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
-                    ul.className = 'mt-2 space-y-2';
-                    
-                    section.appendChild(input);
-                    section.appendChild(ul);
-                    card.appendChild(section);
-                });
-                grid.appendChild(card);
-            }
-        }
-        
         function toggleBreak() {
             const btn = document.getElementById('break-btn');
             const timer = document.getElementById('break-timer');
@@ -644,16 +655,15 @@
             }
         }
 
-        document.getElementById('prev-week').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); };
-        document.getElementById('next-week').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); };
+        document.getElementById('prev-week').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderAll(); };
+        document.getElementById('next-week').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderAll(); };
         document.getElementById('add-custom').onclick = () => {
             const val = document.getElementById('custom-task-input').value.trim();
             if (val) {
                 const taskId = crypto.randomUUID();
                 const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
-                const isDueNextSchoolDay = true;
-                const taskData = { id: taskId, name: val, cls: "Custom", time: 30, done: false, isTonight: true, date: nextSchoolDay };
-                
+                const taskData = { id: taskId, name: val, cls: "Custom", time: 30, done: false, isTonight: true, date: nextSchoolDay, orderIndex: Date.now() };
+
                 addTaskToDb(taskData);
                 document.getElementById('custom-task-input').value = '';
             }
@@ -663,7 +673,7 @@
         };
         document.getElementById('generate-schedule').onclick = generateSchedule;
         document.getElementById('break-btn').onclick = toggleBreak;
-        
+
         renderWeek();
     </script>
 </body>
