@@ -255,8 +255,14 @@
             showMessage("Please log in to add tasks.");
             return;
         }
-        const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
-        await setDoc(doc(tasksRef, taskData.id), taskData);
+        try {
+            const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+            await setDoc(doc(tasksRef, taskData.id), taskData);
+            console.log("Successfully added task to Firestore:", taskData.id);
+        } catch (error) {
+            console.error("Error adding task:", error);
+            showMessage("Failed to add task. Please check the console for details.");
+        }
     }
 
     async function updateTaskInDb(taskId, newData) {
@@ -264,8 +270,14 @@
              showMessage("Please log in to update tasks.");
              return;
         }
-        const tasksRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
-        await setDoc(tasksRef, newData, { merge: true });
+        try {
+            const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
+            await setDoc(taskDocRef, newData, { merge: true });
+            console.log("Successfully updated task in Firestore:", taskId);
+        } catch (error) {
+            console.error("Error updating task:", error);
+            showMessage("Failed to update task. Please check the console for details.");
+        }
     }
 
     async function deleteTaskFromDb(taskId) {
@@ -273,8 +285,14 @@
             showMessage("Please log in to delete tasks.");
             return;
         }
-        const tasksRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
-        await deleteDoc(tasksRef);
+        try {
+            const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
+            await deleteDoc(taskDocRef);
+            console.log("Successfully deleted task from Firestore:", taskId);
+        } catch (error) {
+            console.error("Error deleting task:", error);
+            showMessage("Failed to delete task. Please check the console for details.");
+        }
     }
 
     // Modal functions (instead of alert/confirm)
