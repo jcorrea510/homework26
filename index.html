@@ -159,7 +159,6 @@
         let userId = null;
         let unsubscribeTasks = () => {}; // A function to store the unsubscribe method
 
-        // This is your Firebase configuration. It has been added here to resolve the error.
         const firebaseConfig = {
             apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
             authDomain: "thelog26hw.firebaseapp.com",
@@ -168,11 +167,8 @@
             messagingSenderId: "884261460141",
             appId: "1:884261460141:web:dd3cceeca0c330f257ce24"
         };
-
-        // Your project ID is used as the app ID for file paths in Firestore
         const appId = "thelog26hw";
 
-        // Firebase Initialization
         try {
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -193,7 +189,7 @@
         };
 
         // Auth State Listener and Firestore Listener combined for reliability
-        onAuthStateChanged(auth, (user) => {
+        onAuthStateChanged(auth, async (user) => {
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
             unsubscribeTasks(); // Unsubscribe from the previous listener
@@ -207,16 +203,41 @@
                 const tasksRef = collection(db, tasksPath);
                 
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    // CRITICAL FIX: Rebuild the tasks object from scratch
-                    tasks = {};
-                    snapshot.docs.forEach(doc => {
-                        const task = doc.data();
-                        const key = task.date;
-                        if (!tasks[key]) tasks[key] = {};
-                        if (!tasks[key][task.cls]) tasks[key][task.cls] = [];
-                        tasks[key][task.cls].push({ id: doc.id, ...task });
+                    const newTasks = {};
+                    snapshot.docChanges().forEach((change) => {
+                        const taskData = change.doc.data();
+                        const key = taskData.date;
+                        const cls = taskData.cls;
+
+                        if (!newTasks[key]) newTasks[key] = {};
+                        if (!newTasks[key][cls]) newTasks[key][cls] = [];
+
+                        if (change.type === "added") {
+                            newTasks[key][cls].push({ id: change.doc.id, ...taskData });
+                            console.log("Task Added:", taskData);
+                        } else if (change.type === "modified") {
+                            // Find and update the task in the newTasks object
+                            const index = newTasks[key][cls].findIndex(t => t.id === change.doc.id);
+                            if (index !== -1) {
+                                newTasks[key][cls][index] = { id: change.doc.id, ...taskData };
+                            } else {
+                                // If not found, it must have been a new task that was modified quickly. Add it.
+                                newTasks[key][cls].push({ id: change.doc.id, ...taskData });
+                            }
+                            console.log("Task Modified:", taskData);
+                        } else if (change.type === "removed") {
+                            // Find and remove the task from the newTasks object
+                            const index = newTasks[key][cls].findIndex(t => t.id === change.doc.id);
+                            if (index !== -1) {
+                                newTasks[key][cls].splice(index, 1);
+                            }
+                            console.log("Task Removed:", change.doc.id);
+                        }
                     });
-                    console.log("Tasks loaded from Firestore:", tasks);
+
+                    // Completely replace the old tasks object with the new one
+                    tasks = newTasks;
+                    
                     renderAllTasks();
                     renderTonight();
                     generateSchedule();
@@ -415,7 +436,6 @@
             renderAllTasks();
         }
         
-        // This function has been refactored to create elements more robustly
         function addAndRenderTaskElement(ul, taskData) {
             const li = document.createElement('li');
             li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
