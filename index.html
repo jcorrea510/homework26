@@ -157,7 +157,35 @@
         let breakTimerInterval = null;
         let db, auth;
         let userId = null;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // This is your Firebase configuration. It has been added here to resolve the error.
+        const firebaseConfig = {
+            apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
+            authDomain: "thelog26hw.firebaseapp.com",
+            projectId: "thelog26hw",
+            storageBucket: "thelog26hw.firebasestorage.app",
+            messagingSenderId: "884261460141",
+            appId: "1:884261460141:web:dd3cceeca0c330f257ce24"
+        };
+
+        // Your project ID is used as the app ID for file paths in Firestore
+        const appId = "thelog26hw";
+
+        // Firebase Initialization
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            // For a static site like GitHub Pages, use anonymous sign-in by default
+            signInAnonymously(auth).catch(error => {
+                console.error("Error signing in anonymously:", error);
+            });
+            
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+            showMessage("Failed to connect to the database. Your data will not be saved.");
+        }
 
         const subjectColors = {
             "Math": "text-red-400",
@@ -168,33 +196,6 @@
             "Physics": "text-green-400",
             "Custom": "text-pink-400"
         };
-
-        // Firebase Initialization
-        let firebaseConfig;
-        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            try {
-                firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                // Use custom token if provided (for canvas environment)
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    signInWithCustomToken(auth, __initial_auth_token).catch(error => {
-                        console.error("Error signing in with custom token:", error);
-                        signInAnonymously(auth); // Fallback
-                    });
-                } else {
-                    signInAnonymously(auth);
-                }
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
-                showMessage("Failed to connect to the database. Your data will not be saved.");
-            }
-        } else {
-            console.error("Firebase config not found. Data will not be saved.");
-            showMessage("Failed to connect to the database. Your data will not be saved.");
-        }
 
         // Auth State Listener
         onAuthStateChanged(auth, (user) => {
