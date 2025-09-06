@@ -177,11 +177,6 @@
             db = getFirestore(app);
             auth = getAuth(app);
             
-            // For a static site like GitHub Pages, use anonymous sign-in by default
-            signInAnonymously(auth).catch(error => {
-                console.error("Error signing in anonymously:", error);
-            });
-            
         } catch (e) {
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
