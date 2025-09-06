@@ -157,7 +157,8 @@
         let breakTimerInterval = null;
         let db, auth;
         let userId = null;
-        
+        let unsubscribeTasks = () => {}; // A function to store the unsubscribe method
+
         // This is your Firebase configuration. It has been added here to resolve the error.
         const firebaseConfig = {
             apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
@@ -176,7 +177,6 @@
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-            listenForTasks(); // <-- This is the key change to ensure the listener is always active
         } catch (e) {
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
@@ -192,38 +192,21 @@
             "Custom": "text-pink-400"
         };
 
-        // Auth State Listener
+        // Auth State Listener and Firestore Listener combined for reliability
         onAuthStateChanged(auth, (user) => {
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
+            unsubscribeTasks(); // Unsubscribe from the previous listener
             if (user) {
                 userId = user.uid;
                 authButton.textContent = 'Sign Out';
                 userInfo.textContent = `User ID: ${userId}`;
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
-            } else {
-                userId = null;
-                authButton.textContent = 'Log In / Sign Up';
-                userInfo.textContent = 'Not signed in';
-                authButton.onclick = () => showAuthModal('login');
-                tasks = {};
-                renderAllTasks();
-                renderTonight();
-            }
-        });
-
-        // Firestore Functions
-        async function listenForTasks() {
-            if (!db) {
-                console.warn("Attempted to listen for tasks without a database instance.");
-                return;
-            }
-            onAuthStateChanged(auth, (user) => {
-                const uid = user ? user.uid : 'anonymous'; // Use a consistent ID even if not logged in for testing
-                const tasksPath = `artifacts/${appId}/users/${uid}/tasks`;
+                
+                const tasksPath = `artifacts/${appId}/users/${userId}/tasks`;
                 const tasksRef = collection(db, tasksPath);
                 
-                onSnapshot(tasksRef, (snapshot) => {
+                unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
                     tasks = {}; // Clear tasks on each update to rebuild from a clean state
                     snapshot.docs.forEach(doc => {
                         const task = doc.data();
@@ -240,8 +223,16 @@
                     console.error("Error fetching tasks:", error);
                     showMessage("Failed to load your data from the database. Please try again later.");
                 });
-            });
-        }
+            } else {
+                userId = null;
+                authButton.textContent = 'Log In / Sign Up';
+                userInfo.textContent = 'Not signed in';
+                authButton.onclick = () => showAuthModal('login');
+                tasks = {};
+                renderAllTasks();
+                renderTonight();
+            }
+        });
         
         async function addTaskToDb(taskData) {
             if (!userId || !db) {
