@@ -176,7 +176,7 @@
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-            
+            listenForTasks(); // <-- This is the key change to ensure the listener is always active
         } catch (e) {
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
@@ -201,7 +201,6 @@
                 authButton.textContent = 'Sign Out';
                 userInfo.textContent = `User ID: ${userId}`;
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
-                listenForTasks();
             } else {
                 userId = null;
                 authButton.textContent = 'Log In / Sign Up';
@@ -215,31 +214,35 @@
 
         // Firestore Functions
         async function listenForTasks() {
-            if (!userId || !db) {
-                console.warn("Attempted to listen for tasks without a user ID or database instance.");
+            if (!db) {
+                console.warn("Attempted to listen for tasks without a database instance.");
                 return;
             }
-            const tasksPath = `artifacts/${appId}/users/${userId}/tasks`;
-            const tasksRef = collection(db, tasksPath);
-            onSnapshot(tasksRef, (snapshot) => {
-                tasks = {}; // Clear tasks on each update to rebuild from a clean state
-                snapshot.docs.forEach(doc => {
-                    const task = doc.data();
-                    const key = task.date;
-                    if (!tasks[key]) tasks[key] = {};
-                    if (!tasks[key][task.cls]) tasks[key][task.cls] = [];
-                    tasks[key][task.cls].push({ id: doc.id, ...task });
+            onAuthStateChanged(auth, (user) => {
+                const uid = user ? user.uid : 'anonymous'; // Use a consistent ID even if not logged in for testing
+                const tasksPath = `artifacts/${appId}/users/${uid}/tasks`;
+                const tasksRef = collection(db, tasksPath);
+                
+                onSnapshot(tasksRef, (snapshot) => {
+                    tasks = {}; // Clear tasks on each update to rebuild from a clean state
+                    snapshot.docs.forEach(doc => {
+                        const task = doc.data();
+                        const key = task.date;
+                        if (!tasks[key]) tasks[key] = {};
+                        if (!tasks[key][task.cls]) tasks[key][task.cls] = [];
+                        tasks[key][task.cls].push({ id: doc.id, ...task });
+                    });
+                    console.log("Tasks loaded from Firestore:", tasks);
+                    renderAllTasks();
+                    renderTonight();
+                    generateSchedule();
+                }, (error) => {
+                    console.error("Error fetching tasks:", error);
+                    showMessage("Failed to load your data from the database. Please try again later.");
                 });
-                console.log("Tasks loaded from Firestore:", tasks);
-                renderAllTasks();
-                renderTonight();
-                generateSchedule();
-            }, (error) => {
-                console.error("Error fetching tasks:", error);
-                showMessage("Failed to load your data from the database. Please try again later.");
             });
         }
-
+        
         async function addTaskToDb(taskData) {
             if (!userId || !db) {
                 showMessage("Please log in to add tasks.");
