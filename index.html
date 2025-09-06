@@ -157,7 +157,7 @@
     let breakTimerInterval = null;
     let db, auth;
     let userId;
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'thelog26hw'; // Use project ID as fallback
 
     const subjectColors = {
       "Math": "text-red-400",
@@ -210,7 +210,7 @@
         if (user) {
             userId = user.uid;
             authButton.textContent = 'Sign Out';
-            userInfo.textContent = `Signed in as: ${user.email || userId.substring(0, 8) + '...'}`;
+            userInfo.textContent = `Signed in as: ${user.email || 'User ID: ' + userId.substring(0, 8) + '...'}`;
             authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
             listenForTasks();
         } else {
@@ -230,7 +230,9 @@
             console.warn("Attempted to listen for tasks without a user ID.");
             return;
         }
-        const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+        const tasksPath = `artifacts/${appId}/users/${userId}/tasks`;
+        console.log("Listening for tasks at path:", tasksPath);
+        const tasksRef = collection(db, tasksPath);
         onSnapshot(tasksRef, (snapshot) => {
             tasks = {};
             snapshot.docs.forEach(doc => {
@@ -257,6 +259,7 @@
         }
         try {
             const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+            console.log("Attempting to add task at path:", tasksRef.path);
             await setDoc(doc(tasksRef, taskData.id), taskData);
             console.log("Successfully added task to Firestore:", taskData.id);
         } catch (error) {
@@ -272,6 +275,7 @@
         }
         try {
             const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
+            console.log("Attempting to update task at path:", taskDocRef.path);
             await setDoc(taskDocRef, newData, { merge: true });
             console.log("Successfully updated task in Firestore:", taskId);
         } catch (error) {
@@ -287,6 +291,7 @@
         }
         try {
             const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
+            console.log("Attempting to delete task at path:", taskDocRef.path);
             await deleteDoc(taskDocRef);
             console.log("Successfully deleted task from Firestore:", taskId);
         } catch (error) {
