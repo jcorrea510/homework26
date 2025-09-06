@@ -214,76 +214,6 @@
             "Custom": "text-pink-400"
         };
         
-        function handleTaskUpdates(changes) {
-            changes.forEach(change => {
-                const taskData = { id: change.doc.id, ...change.doc.data() };
-                const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
-                const tonightListEl = document.getElementById('tonight-list');
-                
-                if (change.type === 'added') {
-                    tasksCache[taskData.id] = taskData;
-                    if (listEl) {
-                         const existingLi = listEl.querySelector(`li[data-id="${taskData.id}"]`);
-                         if (!existingLi) {
-                            listEl.appendChild(createTaskLi(taskData, 'calendar'));
-                         }
-                    }
-                    if (taskData.isTonight) {
-                        const existingLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
-                        if (!existingLi) {
-                            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
-                            const lastTask = tonightTasks[tonightTasks.length - 1];
-                            const lastLi = tonightListEl.querySelector(`li[data-id="${lastTask.id}"]`);
-                            if (lastLi) {
-                                lastLi.insertAdjacentElement('afterend', createTaskLi(taskData, 'tonight'));
-                            } else {
-                                tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
-                            }
-                        }
-                    }
-                } else if (change.type === 'modified') {
-                    tasksCache[taskData.id] = taskData;
-                    const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
-                    const tonightLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
-                    
-                    if (calendarLi) {
-                         updateTaskLi(calendarLi, taskData, 'calendar');
-                    }
-                    if (tonightLi) {
-                        updateTaskLi(tonightLi, taskData, 'tonight');
-                    }
-
-                    if (taskData.isTonight) {
-                        if (!tonightLi) {
-                            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
-                            const lastTask = tonightTasks[tonightTasks.length - 1];
-                            const lastLi = tonightListEl.querySelector(`li[data-id="${lastTask.id}"]`);
-                            if (lastLi) {
-                                lastLi.insertAdjacentElement('afterend', createTaskLi(taskData, 'tonight'));
-                            } else {
-                                tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
-                            }
-                        }
-                    } else if (tonightLi) {
-                        tonightLi.remove();
-                    }
-                    updateScheduleLi(taskData);
-                } else if (change.type === 'removed') {
-                    delete tasksCache[taskData.id];
-                    const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
-                    const tonightLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
-                    
-                    if (calendarLi) {
-                         calendarLi.remove();
-                    }
-                    if (tonightLi) {
-                        tonightLi.remove();
-                    }
-                }
-            });
-            updateCounts();
-        }
-        
         function createTaskLi(taskData, type) {
             const li = document.createElement('li');
             li.dataset.id = taskData.id;
@@ -355,83 +285,61 @@
             }
             return li;
         }
-
-        function updateTaskLi(li, taskData, type) {
-            li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 ${taskData.done ? 'opacity-50' : ''}`;
-            
-            if (type === 'calendar') {
-                const tonightBtn = li.querySelector('.tonight-checkbox-btn');
-                const completedBtn = li.querySelector('.completed-checkbox-btn');
-                const textSpan = li.querySelector('.flex.items-center.gap-2 span:not([class*="text-"])');
-                
-                if (tonightBtn) {
-                    tonightBtn.classList.toggle('bg-blue-500', taskData.isTonight);
-                    tonightBtn.classList.toggle('border-blue-500', taskData.isTonight);
-                    tonightBtn.innerHTML = taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
-                }
-                
-                if (completedBtn) {
-                    completedBtn.classList.toggle('bg-green-500', taskData.done);
-                    completedBtn.classList.toggle('border-green-500', taskData.done);
-                    completedBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
-                }
-                
-                if (textSpan) {
-                    if (taskData.done) {
-                        textSpan.classList.add('line-through', 'text-gray-400');
-                    } else {
-                        textSpan.classList.remove('line-through', 'text-gray-400');
-                    }
-                }
-            } else { // 'tonight'
-                const doneBtn = li.querySelector('.tonight-done-btn');
-                const textSpan = li.querySelector('.flex-1 span');
-                const timeInput = li.querySelector('input[type="number"]');
-
-                if (doneBtn) {
-                    doneBtn.classList.toggle('bg-green-500', taskData.done);
-                    doneBtn.classList.toggle('border-green-500', taskData.done);
-                    doneBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
-                }
-                
-                if (textSpan) {
-                    if (taskData.done) {
-                        textSpan.classList.add('line-through', 'text-gray-400');
-                        textSpan.classList.remove('text-white');
-                    } else {
-                        textSpan.classList.remove('line-through', 'text-gray-400');
-                        textSpan.classList.add('text-white');
-                    }
-                }
-
-                if (timeInput) {
-                    timeInput.value = taskData.time;
-                }
-            }
+        
+        function updateCounts() {
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
+            const totalToDo = tonightTasks.filter(t => !t.done).length;
+            const totalDone = tonightTasks.filter(t => t.done).length;
+            const totalTodoTime = tonightTasks.filter(t => !t.done).reduce((a, c) => a + (c.time || 0), 0);
+            const totalDoneTime = tonightTasks.filter(t => t.done).reduce((a, c) => a + (c.time || 0), 0);
+            document.getElementById('todo-count').textContent = `${totalToDo} (${totalTodoTime} mins)`;
+            document.getElementById('done-count').textContent = `${totalDone} (${totalDoneTime} mins)`;
         }
 
-        function updateScheduleLi(taskData) {
-            const scheduleLi = document.querySelector(`#schedule-list li[data-id="${taskData.id}"]`);
-            if (scheduleLi) {
-                const checkboxBtn = scheduleLi.querySelector('.schedule-checkbox-btn');
-                const titleSpan = scheduleLi.querySelector('.font-semibold.text-lg');
-
-                if (checkboxBtn) {
-                    checkboxBtn.classList.toggle('bg-green-500', taskData.done);
-                    checkboxBtn.classList.toggle('border-green-500', taskData.done);
-                    checkboxBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
-                }
-
-                if (titleSpan) {
-                    if (taskData.done) {
-                        titleSpan.classList.add('line-through', 'text-gray-400');
-                        titleSpan.classList.remove('text-white');
-                    } else {
-                        titleSpan.classList.remove('line-through', 'text-gray-400');
-                        titleSpan.classList.add('text-white');
-                    }
-                }
+        function generateSchedule() {
+            let start = document.getElementById('schedule-start-time-input').value;
+            if (!start) {
+                const now = new Date();
+                start = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             }
+            let current = new Date();
+            const [h, m] = start.split(':').map(Number);
+            current.setHours(h, m, 0, 0);
+            current = new Date(current.getTime() + totalBreakMs);
+            const schedule = document.getElementById('schedule-list');
+            schedule.innerHTML = '';
+            // Only include tonight's tasks that are not yet done
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done).sort((a, b) => a.orderIndex - b.orderIndex);
+            
+            tonightTasks.forEach(t => {
+                const end = new Date(current.getTime() + t.time * 60000);
+                const li = document.createElement('li');
+                li.dataset.id = t.id;
+                li.className = `bg-gray-800 p-4 rounded-xl shadow-md fade-in`;
+                li.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <button class="schedule-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.done ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
+                            ${t.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
+                        </button>
+                        <div>
+                            <p class="font-semibold text-lg ${t.done ? 'line-through text-gray-400' : 'text-white'}">
+                                <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
+                            </p>
+                            <p class="text-sm text-gray-400 mt-1">
+                                <span class="font-medium">${current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span class="mx-2">—</span>
+                                <span class="font-medium">${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </p>
+                        </div>
+                    </div>
+                `;
+                const checkboxBtn = li.querySelector('.schedule-checkbox-btn');
+                checkboxBtn.addEventListener('click', () => {
+                    updateTaskInDb(t.id, { done: !t.done });
+                });
+                schedule.appendChild(li);
+                current = end;
+            });
         }
         
         onAuthStateChanged(auth, async (user) => {
@@ -450,12 +358,41 @@
 
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
                 
-                // Clear UI on sign-in before re-rendering
-                document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
-                tasksCache = {};
-
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    handleTaskUpdates(snapshot.docChanges());
+                    tasksCache = {};
+                    const tonightListEl = document.getElementById('tonight-list');
+                    const calendarGridEl = document.getElementById('calendar-grid');
+
+                    // Clear the UI before re-rendering
+                    tonightListEl.innerHTML = '';
+                    document.querySelectorAll('#calendar-grid ul').forEach(ul => ul.innerHTML = '');
+
+                    snapshot.docs.forEach(doc => {
+                        const taskData = { id: doc.id, ...doc.data() };
+                        tasksCache[taskData.id] = taskData;
+                        
+                        // Add to Tonight list if applicable
+                        if (taskData.isTonight) {
+                            tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                        }
+                        
+                        // Add to calendar list if applicable
+                        try {
+                            const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
+                            if (listEl) {
+                                listEl.appendChild(createTaskLi(taskData, 'calendar'));
+                            }
+                        } catch (e) {
+                            console.log("Task date not in current week view, skipping calendar render.", taskData.date);
+                        }
+                    });
+                    
+                    // Re-sort the Tonight list after all items are added
+                    const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
+                    tonightListEl.innerHTML = '';
+                    tonightTasks.forEach(t => tonightListEl.appendChild(createTaskLi(t, 'tonight')));
+                    
+                    updateCounts();
                 }, (error) => {
                     console.error("Error fetching tasks:", error);
                     showMessage("Failed to load your data from the database. Please try again later.");
@@ -680,63 +617,6 @@
             }
         }
         
-        function updateCounts() {
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
-            const totalToDo = tonightTasks.filter(t => !t.done).length;
-            const totalDone = tonightTasks.filter(t => t.done).length;
-            const totalTodoTime = tonightTasks.filter(t => !t.done).reduce((a, c) => a + (c.time || 0), 0);
-            const totalDoneTime = tonightTasks.filter(t => t.done).reduce((a, c) => a + (c.time || 0), 0);
-            document.getElementById('todo-count').textContent = `${totalToDo} (${totalTodoTime} mins)`;
-            document.getElementById('done-count').textContent = `${totalDone} (${totalDoneTime} mins)`;
-        }
-
-        function generateSchedule() {
-            let start = document.getElementById('schedule-start-time-input').value;
-            if (!start) {
-                const now = new Date();
-                start = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            }
-            let current = new Date();
-            const [h, m] = start.split(':').map(Number);
-            current.setHours(h, m, 0, 0);
-            current = new Date(current.getTime() + totalBreakMs);
-            const schedule = document.getElementById('schedule-list');
-            schedule.innerHTML = '';
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
-            
-            tonightTasks.forEach(t => {
-                const end = new Date(current.getTime() + t.time * 60000);
-                const li = document.createElement('li');
-                li.dataset.id = t.id;
-                li.className = `bg-gray-800 p-4 rounded-xl shadow-md fade-in ${t.done ? 'opacity-50' : ''}`;
-                li.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <button class="schedule-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.done ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
-                            ${t.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
-                        </button>
-                        <div>
-                            <p class="font-semibold text-lg ${t.done ? 'line-through text-gray-400' : 'text-white'}">
-                                <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
-                            </p>
-                            <p class="text-sm text-gray-400 mt-1">
-                                <span class="font-medium">${current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                <span class="mx-2">—</span>
-                                <span class="font-medium">${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            </p>
-                        </div>
-                    </div>
-                `;
-                const checkboxBtn = li.querySelector('.schedule-checkbox-btn');
-                checkboxBtn.addEventListener('click', () => {
-                    updateTaskInDb(t.id, { done: !t.done });
-                });
-                schedule.appendChild(li);
-                if (!t.done) {
-                    current = end;
-                }
-            });
-        }
-
         function toggleBreak() {
             const btn = document.getElementById('break-btn');
             const timer = document.getElementById('break-timer');
