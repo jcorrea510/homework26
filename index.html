@@ -270,9 +270,6 @@
             try {
                 const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
                 await deleteDoc(taskDocRef);
-                // After deleting from the database, force a re-render to clear the UI immediately.
-                renderAllTasks();
-                renderTonight();
             } catch (error) {
                 console.error("Error deleting task:", error);
                 showMessage("Failed to delete task. Please check the console for details.");
@@ -390,7 +387,6 @@
                     label.textContent = cls;
                     section.appendChild(label);
                     
-                    // Input field for adding a new task (placed before the list)
                     const input = document.createElement('input');
                     input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
                     input.placeholder = 'Add assignment...';
@@ -416,7 +412,7 @@
                     ul.className = 'mt-2 space-y-2';
                     
                     section.appendChild(input);
-                    section.appendChild(ul); // Now appending the list AFTER the input
+                    section.appendChild(ul);
                     card.appendChild(section);
                 });
                 grid.appendChild(card);
@@ -478,11 +474,18 @@
         }
 
         function renderAllTasks() {
+            // Check if tasks is not an object or is empty before trying to iterate
+            if (!tasks || Object.keys(tasks).length === 0) {
+                 // Clear all task lists
+                document.querySelectorAll('#calendar-grid ul').forEach(ul => ul.innerHTML = '');
+                return; // Exit early if there's nothing to render
+            }
+
             Object.keys(tasks).forEach(day => {
                 Object.keys(tasks[day]).forEach(cls => {
                     const ul = document.getElementById(`${day}-${cls.replace(' ', '-')}`);
                     if (!ul) return;
-                    ul.innerHTML = ''; // Clear all existing tasks
+                    ul.innerHTML = '';
                     
                     const dayTasks = tasks[day][cls] || [];
                     dayTasks.forEach(t => {
