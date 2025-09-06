@@ -203,36 +203,19 @@
                 const tasksRef = collection(db, tasksPath);
                 
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    const newTasks = {};
-                    snapshot.docChanges().forEach((change) => {
-                        const taskData = change.doc.data();
+                    const tempTasks = {};
+                    snapshot.docs.forEach((doc) => {
+                        const taskData = doc.data();
                         const key = taskData.date;
                         const cls = taskData.cls;
 
-                        if (!newTasks[key]) newTasks[key] = {};
-                        if (!newTasks[key][cls]) newTasks[key][cls] = [];
+                        if (!tempTasks[key]) tempTasks[key] = {};
+                        if (!tempTasks[key][cls]) tempTasks[key][cls] = [];
 
-                        if (change.type === "added") {
-                            newTasks[key][cls].push({ id: change.doc.id, ...taskData });
-                            console.log("Task Added:", taskData);
-                        } else if (change.type === "modified") {
-                            const index = newTasks[key][cls].findIndex(t => t.id === change.doc.id);
-                            if (index !== -1) {
-                                newTasks[key][cls][index] = { id: change.doc.id, ...taskData };
-                            } else {
-                                newTasks[key][cls].push({ id: change.doc.id, ...taskData });
-                            }
-                            console.log("Task Modified:", taskData);
-                        } else if (change.type === "removed") {
-                            const index = newTasks[key][cls].findIndex(t => t.id === change.doc.id);
-                            if (index !== -1) {
-                                newTasks[key][cls].splice(index, 1);
-                            }
-                            console.log("Task Removed:", change.doc.id);
-                        }
+                        tempTasks[key][cls].push({ id: doc.id, ...taskData });
                     });
 
-                    tasks = newTasks;
+                    tasks = tempTasks;
                     renderAllTasks();
                     renderTonight();
                     generateSchedule();
@@ -404,12 +387,7 @@
                     label.textContent = cls;
                     section.appendChild(label);
                     
-                    const ul = document.createElement('ul');
-                    ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
-                    ul.className = 'mt-2 space-y-2';
-                    section.appendChild(ul);
-                    
-                    // Input field for adding a new task
+                    // Input field for adding a new task (placed before the list)
                     const input = document.createElement('input');
                     input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
                     input.placeholder = 'Add assignment...';
@@ -430,7 +408,12 @@
                         }
                     });
                     
+                    const ul = document.createElement('ul');
+                    ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
+                    ul.className = 'mt-2 space-y-2';
+                    
                     section.appendChild(input);
+                    section.appendChild(ul); // Now appending the list AFTER the input
                     card.appendChild(section);
                 });
                 grid.appendChild(card);
