@@ -45,6 +45,16 @@
             min-width: 300px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
         }
+        
+        .sortable-ghost {
+            background-color: rgba(75, 85, 99, 0.5) !important;
+            border-radius: 1rem;
+            opacity: 0.7;
+        }
+        
+        .sortable-drag {
+            opacity: 0 !important;
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen p-6 md:p-12">
@@ -143,7 +153,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         setLogLevel('debug');
@@ -156,9 +166,10 @@
         let breakTimerInterval = null;
         let db, auth;
         let userId = null;
-        let tasksCache = {}; // Cache to hold tasks for quick reference
-        let unsubscribeTasks = null; // Store the unsubscribe function for the Firestore listener
-
+        let tasksCache = {};
+        let unsubscribeTasks = null;
+        let scheduleHtmlCache = "";
+        
         const firebaseConfig = {
             apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
             authDomain: "thelog26hw.firebaseapp.com",
@@ -177,6 +188,21 @@
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
         }
+        
+        // Initialize Sortable.js on the Tonight list
+        const tonightList = document.getElementById('tonight-list');
+        const sortableTonight = new Sortable(tonightList, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onSort: function (evt) {
+                if (!userId) {
+                    showMessage("Please log in to reorder tasks.");
+                    return;
+                }
+                const newOrder = Array.from(evt.to.children).map(item => item.dataset.id);
+                updateTaskOrderInDb(newOrder);
+            },
+        });
 
         const subjectColors = {
             "Math": "text-red-400",
@@ -188,14 +214,12 @@
             "Custom": "text-pink-400"
         };
         
-        // This function will handle all real-time UI updates
         function handleTaskUpdates(changes) {
             changes.forEach(change => {
                 const taskData = { id: change.doc.id, ...change.doc.data() };
                 const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
                 const tonightListEl = document.getElementById('tonight-list');
-                const tonightLi = document.querySelector(`#tonight-list li[data-id="${taskData.id}"]`);
-
+                
                 if (change.type === 'added') {
                     tasksCache[taskData.id] = taskData;
                     if (listEl) {
@@ -207,30 +231,48 @@
                     if (taskData.isTonight) {
                         const existingLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
                         if (!existingLi) {
-                            tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
+                            const lastTask = tonightTasks[tonightTasks.length - 1];
+                            const lastLi = tonightListEl.querySelector(`li[data-id="${lastTask.id}"]`);
+                            if (lastLi) {
+                                lastLi.insertAdjacentElement('afterend', createTaskLi(taskData, 'tonight'));
+                            } else {
+                                tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                            }
                         }
                     }
                 } else if (change.type === 'modified') {
                     tasksCache[taskData.id] = taskData;
                     const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
+                    const tonightLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
                     
                     if (calendarLi) {
                          updateTaskLi(calendarLi, taskData, 'calendar');
                     }
-                    
+                    if (tonightLi) {
+                        updateTaskLi(tonightLi, taskData, 'tonight');
+                    }
+
                     if (taskData.isTonight) {
-                        if (tonightLi) {
-                            updateTaskLi(tonightLi, taskData, 'tonight');
-                        } else {
-                            tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                        if (!tonightLi) {
+                            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
+                            const lastTask = tonightTasks[tonightTasks.length - 1];
+                            const lastLi = tonightListEl.querySelector(`li[data-id="${lastTask.id}"]`);
+                            if (lastLi) {
+                                lastLi.insertAdjacentElement('afterend', createTaskLi(taskData, 'tonight'));
+                            } else {
+                                tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                            }
                         }
                     } else if (tonightLi) {
                         tonightLi.remove();
                     }
-
+                    updateScheduleLi(taskData);
                 } else if (change.type === 'removed') {
                     delete tasksCache[taskData.id];
                     const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
+                    const tonightLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
+                    
                     if (calendarLi) {
                          calendarLi.remove();
                     }
@@ -240,16 +282,14 @@
                 }
             });
             updateCounts();
-            generateSchedule();
         }
-
+        
         function createTaskLi(taskData, type) {
             const li = document.createElement('li');
             li.dataset.id = taskData.id;
             li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
             
             let content = '';
-
             if (type === 'calendar') {
                 content = `
                     <div class="flex items-center gap-2">
@@ -271,7 +311,7 @@
                 `;
             } else { // type === 'tonight'
                 content = `
-                    <div class="flex-1 flex items-center gap-3">
+                    <div class="flex-1 flex items-center gap-3 cursor-grab">
                         <button class="tonight-done-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${taskData.done ? 'bg-green-500 border-green-500' : ''}">
                             ${taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
                         </button>
@@ -298,7 +338,7 @@
             if (type === 'calendar') {
                 li.querySelector('.tonight-checkbox-btn').addEventListener('click', () => {
                     const currentTask = tasksCache[taskData.id];
-                    updateTaskInDb(taskData.id, { isTonight: !currentTask.isTonight });
+                    updateTaskInDb(taskData.id, { isTonight: !currentTask.isTonight, orderIndex: Date.now() });
                 });
                 li.querySelector('.completed-checkbox-btn').addEventListener('click', () => {
                     const currentTask = tasksCache[taskData.id];
@@ -369,6 +409,30 @@
                 }
             }
         }
+
+        function updateScheduleLi(taskData) {
+            const scheduleLi = document.querySelector(`#schedule-list li[data-id="${taskData.id}"]`);
+            if (scheduleLi) {
+                const checkboxBtn = scheduleLi.querySelector('.schedule-checkbox-btn');
+                const titleSpan = scheduleLi.querySelector('.font-semibold.text-lg');
+
+                if (checkboxBtn) {
+                    checkboxBtn.classList.toggle('bg-green-500', taskData.done);
+                    checkboxBtn.classList.toggle('border-green-500', taskData.done);
+                    checkboxBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+                }
+
+                if (titleSpan) {
+                    if (taskData.done) {
+                        titleSpan.classList.add('line-through', 'text-gray-400');
+                        titleSpan.classList.remove('text-white');
+                    } else {
+                        titleSpan.classList.remove('line-through', 'text-gray-400');
+                        titleSpan.classList.add('text-white');
+                    }
+                }
+            }
+        }
         
         onAuthStateChanged(auth, async (user) => {
             const authButton = document.getElementById('auth-button');
@@ -404,7 +468,7 @@
                 document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
                 tasksCache = {};
                 updateCounts();
-                generateSchedule();
+                document.getElementById('schedule-list').innerHTML = '';
                 if (unsubscribeTasks) {
                     unsubscribeTasks();
                     unsubscribeTasks = null;
@@ -419,7 +483,8 @@
             }
             try {
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
-                await setDoc(doc(tasksRef, taskData.id), taskData);
+                const newOrderIndex = Date.now();
+                await setDoc(doc(tasksRef, taskData.id), {...taskData, orderIndex: newOrderIndex});
             } catch (error) {
                 console.error("Error adding task:", error);
                 showMessage("Failed to add task. Please check the console for details.");
@@ -440,6 +505,27 @@
             }
         }
 
+        async function updateTaskOrderInDb(newOrder) {
+            if (!userId || !db) {
+                showMessage("Please log in to reorder tasks.");
+                return;
+            }
+            const batch = writeBatch(db);
+            const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+            
+            newOrder.forEach((taskId, index) => {
+                const taskRef = doc(tasksRef, taskId);
+                batch.update(taskRef, { orderIndex: index });
+            });
+            
+            try {
+                await batch.commit();
+            } catch (error) {
+                console.error("Error updating task order:", error);
+                showMessage("Failed to update task order. Please try again.");
+            }
+        }
+
         async function deleteTaskFromDb(taskId) {
             if (!userId || !db) {
                 showMessage("Please log in to delete tasks.");
@@ -454,7 +540,6 @@
             }
         }
 
-        // Modal functions (instead of alert/confirm)
         function showMessage(text) {
             const modal = document.getElementById('message-modal');
             const modalText = document.getElementById('modal-text');
@@ -468,7 +553,6 @@
             };
         }
 
-        // Auth Modal Functions
         const authModal = document.getElementById('auth-modal');
         const authTitle = document.getElementById('auth-title');
         const authForm = document.getElementById('auth-form');
@@ -521,7 +605,6 @@
             }
         });
 
-        // Helper functions
         function getStartOfWeek(date) {
             const d = new Date(date);
             const day = d.getDay();
@@ -532,11 +615,11 @@
         function getNextSchoolDay(date) {
             const d = new Date(date);
             const dayOfWeek = d.getDay();
-            if (dayOfWeek === 5) { // Friday
+            if (dayOfWeek === 5) {
                 d.setDate(d.getDate() + 3);
-            } else if (dayOfWeek === 6) { // Saturday
+            } else if (dayOfWeek === 6) {
                 d.setDate(d.getDate() + 2);
-            } else { // All other days, next day is next school day
+            } else {
                 d.setDate(d.getDate() + 1);
             }
             return d;
@@ -578,10 +661,10 @@
                             const taskId = crypto.randomUUID();
                             const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
                             const isDueNextSchoolDay = date === nextSchoolDay;
-                            const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: date };
+                            const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: date, orderIndex: Date.now() };
                             
                             addTaskToDb(taskData);
-                            e.target.value = ''; // Clear the input field after adding
+                            e.target.value = '';
                         }
                     });
                     
@@ -619,11 +702,12 @@
             current = new Date(current.getTime() + totalBreakMs);
             const schedule = document.getElementById('schedule-list');
             schedule.innerHTML = '';
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done); // Only show undone tasks in the schedule
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => a.orderIndex - b.orderIndex);
             
             tonightTasks.forEach(t => {
                 const end = new Date(current.getTime() + t.time * 60000);
                 const li = document.createElement('li');
+                li.dataset.id = t.id;
                 li.className = `bg-gray-800 p-4 rounded-xl shadow-md fade-in ${t.done ? 'opacity-50' : ''}`;
                 li.innerHTML = `
                     <div class="flex items-center gap-3">
@@ -631,7 +715,7 @@
                             ${t.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
                         </button>
                         <div>
-                            <p class="font-semibold text-lg ${t.done ? 'line-through text-gray-400' : ''}">
+                            <p class="font-semibold text-lg ${t.done ? 'line-through text-gray-400' : 'text-white'}">
                                 <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
                             </p>
                             <p class="text-sm text-gray-400 mt-1">
@@ -647,7 +731,9 @@
                     updateTaskInDb(t.id, { done: !t.done });
                 });
                 schedule.appendChild(li);
-                current = end;
+                if (!t.done) {
+                    current = end;
+                }
             });
         }
 
@@ -688,7 +774,9 @@
             if (val) {
                 const taskId = crypto.randomUUID();
                 const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
+                const isDueNextSchoolDay = true;
                 const taskData = { id: taskId, name: val, cls: "Custom", time: 30, done: false, isTonight: true, date: nextSchoolDay };
+                
                 addTaskToDb(taskData);
                 document.getElementById('custom-task-input').value = '';
             }
