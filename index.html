@@ -194,9 +194,9 @@
                 const taskData = { id: change.doc.id, ...change.doc.data() };
                 const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
                 const tonightListEl = document.getElementById('tonight-list');
+                const tonightLi = document.querySelector(`#tonight-list li[data-id="${taskData.id}"]`);
 
                 if (change.type === 'added') {
-                    // Task added to Firestore
                     tasksCache[taskData.id] = taskData;
                     if (listEl) {
                          const existingLi = listEl.querySelector(`li[data-id="${taskData.id}"]`);
@@ -211,27 +211,29 @@
                         }
                     }
                 } else if (change.type === 'modified') {
-                    // Task modified in Firestore
                     tasksCache[taskData.id] = taskData;
                     const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
+                    
                     if (calendarLi) {
                          updateTaskLi(calendarLi, taskData, 'calendar');
                     }
-                    const tonightLi = document.querySelector(`#tonight-list li[data-id="${taskData.id}"]`);
-                    if (tonightLi) {
-                        updateTaskLi(tonightLi, taskData, 'tonight');
-                    } else if (taskData.isTonight) {
-                         // If task is now marked "tonight" but not in the list, add it.
-                         tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                    
+                    if (taskData.isTonight) {
+                        if (tonightLi) {
+                            updateTaskLi(tonightLi, taskData, 'tonight');
+                        } else {
+                            tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
+                        }
+                    } else if (tonightLi) {
+                        tonightLi.remove();
                     }
+
                 } else if (change.type === 'removed') {
-                    // Task removed from Firestore
                     delete tasksCache[taskData.id];
                     const calendarLi = document.querySelector(`#calendar-grid li[data-id="${taskData.id}"]`);
                     if (calendarLi) {
                          calendarLi.remove();
                     }
-                    const tonightLi = document.querySelector(`#tonight-list li[data-id="${taskData.id}"]`);
                     if (tonightLi) {
                         tonightLi.remove();
                     }
