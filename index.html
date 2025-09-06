@@ -157,6 +157,7 @@
         let db, auth;
         let userId = null;
         let tasksCache = {}; // Cache to hold tasks for quick reference
+        let unsubscribeTasks = null; // Store the unsubscribe function for the Firestore listener
 
         const firebaseConfig = {
             apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
@@ -203,7 +204,7 @@
                             listEl.appendChild(createTaskLi(taskData, 'calendar'));
                          }
                     }
-                    if (taskData.isTonight && tonightListEl) {
+                    if (taskData.isTonight) {
                         const existingLi = tonightListEl.querySelector(`li[data-id="${taskData.id}"]`);
                         if (!existingLi) {
                             tonightListEl.appendChild(createTaskLi(taskData, 'tonight'));
@@ -291,12 +292,22 @@
 
             li.innerHTML = content;
             
+            // Add event listeners for the new LI element
             if (type === 'calendar') {
-                li.querySelector('.tonight-checkbox-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { isTonight: !taskData.isTonight }));
-                li.querySelector('.completed-checkbox-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { done: !taskData.done }));
+                li.querySelector('.tonight-checkbox-btn').addEventListener('click', () => {
+                    const currentTask = tasksCache[taskData.id];
+                    updateTaskInDb(taskData.id, { isTonight: !currentTask.isTonight });
+                });
+                li.querySelector('.completed-checkbox-btn').addEventListener('click', () => {
+                    const currentTask = tasksCache[taskData.id];
+                    updateTaskInDb(taskData.id, { done: !currentTask.done });
+                });
                 li.querySelector('.delete-btn').addEventListener('click', () => deleteTaskFromDb(taskData.id));
             } else { // 'tonight'
-                li.querySelector('.tonight-done-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { done: !taskData.done }));
+                li.querySelector('.tonight-done-btn').addEventListener('click', () => {
+                    const currentTask = tasksCache[taskData.id];
+                    updateTaskInDb(taskData.id, { done: !currentTask.done });
+                });
                 li.querySelector('input[type="number"]').addEventListener('change', (e) => updateTaskInDb(taskData.id, { time: parseInt(e.target.value) || 0 }));
                 li.querySelector('.tonight-remove-btn').addEventListener('click', () => updateTaskInDb(taskData.id, { isTonight: false }));
             }
@@ -309,40 +320,51 @@
             if (type === 'calendar') {
                 const tonightBtn = li.querySelector('.tonight-checkbox-btn');
                 const completedBtn = li.querySelector('.completed-checkbox-btn');
-                const textSpan = li.querySelector('.flex-1 span, .flex.items-center.gap-2 span');
+                const textSpan = li.querySelector('.flex.items-center.gap-2 span:not([class*="text-"])');
                 
-                tonightBtn.classList.toggle('bg-blue-500', taskData.isTonight);
-                tonightBtn.classList.toggle('border-blue-500', taskData.isTonight);
-                tonightBtn.innerHTML = taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
-                
-                completedBtn.classList.toggle('bg-green-500', taskData.done);
-                completedBtn.classList.toggle('border-green-500', taskData.done);
-                completedBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
-
-                if (taskData.done) {
-                    textSpan.classList.add('line-through', 'text-gray-400');
-                } else {
-                    textSpan.classList.remove('line-through', 'text-gray-400');
+                if (tonightBtn) {
+                    tonightBtn.classList.toggle('bg-blue-500', taskData.isTonight);
+                    tonightBtn.classList.toggle('border-blue-500', taskData.isTonight);
+                    tonightBtn.innerHTML = taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
                 }
-
+                
+                if (completedBtn) {
+                    completedBtn.classList.toggle('bg-green-500', taskData.done);
+                    completedBtn.classList.toggle('border-green-500', taskData.done);
+                    completedBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+                }
+                
+                if (textSpan) {
+                    if (taskData.done) {
+                        textSpan.classList.add('line-through', 'text-gray-400');
+                    } else {
+                        textSpan.classList.remove('line-through', 'text-gray-400');
+                    }
+                }
             } else { // 'tonight'
                 const doneBtn = li.querySelector('.tonight-done-btn');
                 const textSpan = li.querySelector('.flex-1 span');
                 const timeInput = li.querySelector('input[type="number"]');
 
-                doneBtn.classList.toggle('bg-green-500', taskData.done);
-                doneBtn.classList.toggle('border-green-500', taskData.done);
-                doneBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+                if (doneBtn) {
+                    doneBtn.classList.toggle('bg-green-500', taskData.done);
+                    doneBtn.classList.toggle('border-green-500', taskData.done);
+                    doneBtn.innerHTML = taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : '';
+                }
                 
-                if (taskData.done) {
-                    textSpan.classList.add('line-through', 'text-gray-400');
-                    textSpan.classList.remove('text-white');
-                } else {
-                    textSpan.classList.remove('line-through', 'text-gray-400');
-                    textSpan.classList.add('text-white');
+                if (textSpan) {
+                    if (taskData.done) {
+                        textSpan.classList.add('line-through', 'text-gray-400');
+                        textSpan.classList.remove('text-white');
+                    } else {
+                        textSpan.classList.remove('line-through', 'text-gray-400');
+                        textSpan.classList.add('text-white');
+                    }
                 }
 
-                timeInput.value = taskData.time;
+                if (timeInput) {
+                    timeInput.value = taskData.time;
+                }
             }
         }
         
@@ -356,15 +378,18 @@
                 userInfo.textContent = `User ID: ${userId}`;
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
                 
+                if (unsubscribeTasks) {
+                    unsubscribeTasks();
+                }
+
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
                 
                 // Clear UI on sign-in before re-rendering
                 document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
+                tasksCache = {};
 
-                onSnapshot(tasksRef, (snapshot) => {
-                    snapshot.docChanges().forEach(change => {
-                        handleTaskUpdates([change]);
-                    });
+                unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
+                    handleTaskUpdates(snapshot.docChanges());
                 }, (error) => {
                     console.error("Error fetching tasks:", error);
                     showMessage("Failed to load your data from the database. Please try again later.");
@@ -378,6 +403,10 @@
                 tasksCache = {};
                 updateCounts();
                 generateSchedule();
+                if (unsubscribeTasks) {
+                    unsubscribeTasks();
+                    unsubscribeTasks = null;
+                }
             }
         });
         
@@ -588,7 +617,7 @@
             current = new Date(current.getTime() + totalBreakMs);
             const schedule = document.getElementById('schedule-list');
             schedule.innerHTML = '';
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done); // Only show undone tasks in the schedule
             
             tonightTasks.forEach(t => {
                 const end = new Date(current.getTime() + t.time * 60000);
