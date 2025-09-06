@@ -156,10 +156,8 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Set log level for debugging
         setLogLevel('debug');
 
-        // Global variables for the app's state
         const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
         let weekStart = getStartOfWeek(new Date());
         let inBreak = false;
@@ -170,23 +168,25 @@
         let userId = null;
         let tasksCache = {};
         let unsubscribeTasks = null;
+        let scheduleHtmlCache = "";
         
-        // Use the provided global variables for Firebase configuration
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const firebaseConfig = {
+            apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
+            authDomain: "thelog26hw.firebaseapp.com",
+            projectId: "thelog26hw",
+            storageBucket: "thelog26hw.firebasestorage.app",
+            messagingSenderId: "884261460141",
+            appId: "1:884261460141:web:dd3cceeca0c330f257ce24"
+        };
+        const appId = "thelog26hw";
 
-        if (firebaseConfig) {
-            try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
-                showMessage("Failed to connect to the database. Your data will not be saved.");
-            }
-        } else {
-            console.error("Firebase config is not available.");
-            showMessage("Firebase configuration is missing. The app cannot function without it.");
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+            showMessage("Failed to connect to the database. Your data will not be saved.");
         }
         
         // Initialize Sortable.js on the Tonight list
@@ -204,7 +204,6 @@
             },
         });
 
-        // Define a mapping for subject colors
         const subjectColors = {
             "Math": "text-red-400",
             "English": "text-yellow-400",
@@ -215,12 +214,6 @@
             "Custom": "text-pink-400"
         };
         
-        /**
-         * Creates a task list item element for a given task.
-         * @param {object} taskData The task data.
-         * @param {string} type 'calendar' or 'tonight'.
-         * @returns {HTMLLIElement} The created list item.
-         */
         function createTaskLi(taskData, type) {
             const li = document.createElement('li');
             li.dataset.id = taskData.id;
@@ -293,9 +286,6 @@
             return li;
         }
         
-        /**
-         * Updates the task counts in the UI.
-         */
         function updateCounts() {
             const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight);
             const totalToDo = tonightTasks.filter(t => !t.done).length;
@@ -306,9 +296,6 @@
             document.getElementById('done-count').textContent = `${totalDone} (${totalDoneTime} mins)`;
         }
 
-        /**
-         * Generates the study schedule based on tonight's tasks.
-         */
         function generateSchedule() {
             let start = document.getElementById('schedule-start-time-input').value;
             if (!start) {
@@ -355,9 +342,6 @@
             });
         }
         
-        /**
-         * The main auth state listener that handles user sign-in/sign-out.
-         */
         onAuthStateChanged(auth, async (user) => {
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
@@ -377,7 +361,8 @@
                 unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
                     tasksCache = {};
                     const tonightListEl = document.getElementById('tonight-list');
-                    
+                    const calendarGridEl = document.getElementById('calendar-grid');
+
                     // Clear the UI before re-rendering
                     tonightListEl.innerHTML = '';
                     document.querySelectorAll('#calendar-grid ul').forEach(ul => ul.innerHTML = '');
@@ -427,21 +412,7 @@
                 }
             }
         });
-
-        // Initial sign-in with custom token or anonymously
-        if (typeof __initial_auth_token !== 'undefined') {
-            signInWithCustomToken(auth, __initial_auth_token).catch((e) => {
-                console.error("Custom token sign-in failed:", e);
-                signInAnonymously(auth).catch(e => console.error("Anonymous sign-in failed:", e));
-            });
-        } else {
-            signInAnonymously(auth).catch(e => console.error("Anonymous sign-in failed:", e));
-        }
         
-        /**
-         * Adds a new task to the database.
-         * @param {object} taskData The task data to add.
-         */
         async function addTaskToDb(taskData) {
             if (!userId || !db) {
                 showMessage("Please log in to add tasks.");
@@ -450,19 +421,13 @@
             try {
                 const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
                 const newOrderIndex = Date.now();
-                const newId = crypto.randomUUID();
-                await setDoc(doc(tasksRef, newId), {...taskData, id: newId, orderIndex: newOrderIndex});
+                await setDoc(doc(tasksRef, taskData.id), {...taskData, orderIndex: newOrderIndex});
             } catch (error) {
                 console.error("Error adding task:", error);
                 showMessage("Failed to add task. Please check the console for details.");
             }
         }
 
-        /**
-         * Updates an existing task in the database.
-         * @param {string} taskId The ID of the task to update.
-         * @param {object} newData The new data to merge.
-         */
         async function updateTaskInDb(taskId, newData) {
             if (!userId || !db) {
                 showMessage("Please log in to update tasks.");
@@ -477,10 +442,6 @@
             }
         }
 
-        /**
-         * Updates the order of tasks in the database using a batch write.
-         * @param {string[]} newOrder An array of task IDs in the new order.
-         */
         async function updateTaskOrderInDb(newOrder) {
             if (!userId || !db) {
                 showMessage("Please log in to reorder tasks.");
@@ -502,10 +463,6 @@
             }
         }
 
-        /**
-         * Deletes a task from the database.
-         * @param {string} taskId The ID of the task to delete.
-         */
         async function deleteTaskFromDb(taskId) {
             if (!userId || !db) {
                 showMessage("Please log in to delete tasks.");
@@ -520,10 +477,6 @@
             }
         }
 
-        /**
-         * Displays a custom message modal.
-         * @param {string} text The message to display.
-         */
         function showMessage(text) {
             const modal = document.getElementById('message-modal');
             const modalText = document.getElementById('modal-text');
@@ -537,7 +490,6 @@
             };
         }
 
-        // Auth modal logic
         const authModal = document.getElementById('auth-modal');
         const authTitle = document.getElementById('auth-title');
         const authForm = document.getElementById('auth-form');
@@ -548,10 +500,6 @@
         const authErrorMsg = document.getElementById('auth-error-msg');
         let isLogin = true;
 
-        /**
-         * Shows the login/signup modal.
-         * @param {string} mode 'login' or 'signup'.
-         */
         function showAuthModal(mode) {
             isLogin = (mode === 'login');
             authTitle.textContent = isLogin ? 'Log In' : 'Sign Up';
@@ -594,11 +542,6 @@
             }
         });
 
-        /**
-         * Gets the date of the start of the week (Monday).
-         * @param {Date} date The date to start from.
-         * @returns {Date} The date of the Monday of that week.
-         */
         function getStartOfWeek(date) {
             const d = new Date(date);
             const day = d.getDay();
@@ -606,27 +549,19 @@
             return new Date(d.setDate(diff));
         }
         
-        /**
-         * Gets the next school day (excluding weekends).
-         * @param {Date} date The current date.
-         * @returns {Date} The date of the next school day.
-         */
         function getNextSchoolDay(date) {
             const d = new Date(date);
             const dayOfWeek = d.getDay();
-            if (dayOfWeek === 5) { // Friday -> Monday
+            if (dayOfWeek === 5) {
                 d.setDate(d.getDate() + 3);
-            } else if (dayOfWeek === 6) { // Saturday -> Monday
+            } else if (dayOfWeek === 6) {
                 d.setDate(d.getDate() + 2);
-            } else { // Weekday -> next day
+            } else {
                 d.setDate(d.getDate() + 1);
             }
             return d;
         }
 
-        /**
-         * Renders the calendar grid for the current week.
-         */
         function renderWeek() {
             document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
             const grid = document.getElementById('calendar-grid');
@@ -635,8 +570,6 @@
             for (let i = 0; i < 5; i++) {
                 const day = new Date(weekStart);
                 day.setDate(weekStart.getDate() + i);
-                const dayStr = day.toISOString().slice(0, 10);
-                
                 const card = document.createElement('div');
                 card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
                 const title = document.createElement('h3');
@@ -652,128 +585,89 @@
                     label.textContent = cls;
                     section.appendChild(label);
                     
-                    const ul = document.createElement('ul');
-                    ul.id = `${dayStr}-${cls.replace(' ', '-')}`;
-                    ul.className = 'space-y-2 mb-2';
-                    section.appendChild(ul);
-
-                    const inputContainer = document.createElement('div');
-                    inputContainer.className = 'flex gap-1 mt-2';
                     const input = document.createElement('input');
-                    input.type = 'text';
-                    input.placeholder = `Add ${cls} task...`;
-                    input.className = 'flex-1 bg-gray-700/50 text-gray-200 placeholder-gray-500 p-2 text-sm rounded-xl focus:ring-2 focus:ring-blue-500 transition';
-                    const button = document.createElement('button');
-                    button.textContent = '+';
-                    button.className = 'px-3 py-1 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 transition transform hover:scale-105';
-                    inputContainer.appendChild(input);
-                    inputContainer.appendChild(button);
-                    section.appendChild(inputContainer);
-
-                    button.addEventListener('click', () => {
-                        if (input.value.trim() !== '') {
-                            const newTask = {
-                                name: input.value,
-                                date: dayStr,
-                                cls: cls,
-                                done: false,
-                                isTonight: false,
-                                time: 30, // Default time in minutes
-                            };
-                            addTaskToDb(newTask);
-                            input.value = '';
+                    input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
+                    input.placeholder = 'Add assignment...';
+                    input.dataset.date = day.toDateString();
+                    input.dataset.class = cls;
+                    input.addEventListener('keydown', e => {
+                        if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                            const taskName = e.target.value.trim();
+                            const date = e.target.dataset.date;
+                            const cls = e.target.dataset.class;
+                            const taskId = crypto.randomUUID();
+                            const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
+                            const isDueNextSchoolDay = date === nextSchoolDay;
+                            const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: date, orderIndex: Date.now() };
+                            
+                            addTaskToDb(taskData);
+                            e.target.value = '';
                         }
                     });
                     
+                    const ul = document.createElement('ul');
+                    ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
+                    ul.className = 'mt-2 space-y-2';
+                    
+                    section.appendChild(input);
+                    section.appendChild(ul);
                     card.appendChild(section);
                 });
                 grid.appendChild(card);
             }
-            
-            // Re-render the tasks on the updated calendar
-            Object.values(tasksCache).forEach(taskData => {
-                const listEl = document.getElementById(`${taskData.date}-${taskData.cls.replace(' ', '-')}`);
-                if (listEl) {
-                    listEl.appendChild(createTaskLi(taskData, 'calendar'));
-                }
-            });
         }
         
-        document.getElementById('prev-week').addEventListener('click', () => {
-            weekStart.setDate(weekStart.getDate() - 7);
-            renderWeek();
-        });
+        function toggleBreak() {
+            const btn = document.getElementById('break-btn');
+            const timer = document.getElementById('break-timer');
+            const msg = document.getElementById('break-delay-msg');
 
-        document.getElementById('next-week').addEventListener('click', () => {
-            weekStart.setDate(weekStart.getDate() + 7);
-            renderWeek();
-        });
-
-        document.getElementById('add-custom').addEventListener('click', () => {
-            const input = document.getElementById('custom-task-input');
-            if (input.value.trim() !== '') {
-                const newTask = {
-                    name: input.value,
-                    date: '', // Custom tasks have no due date
-                    cls: 'Custom',
-                    done: false,
-                    isTonight: true,
-                    time: 30,
-                };
-                addTaskToDb(newTask);
-                input.value = '';
-            }
-        });
-
-        document.getElementById('generate-schedule').addEventListener('click', generateSchedule);
-        
-        document.getElementById('current-time').addEventListener('click', () => {
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            document.getElementById('schedule-start-time-input').value = `${hours}:${minutes}`;
-        });
-        
-        // Break timer logic
-        const breakBtn = document.getElementById('break-btn');
-        const breakTimerEl = document.getElementById('break-timer');
-        const breakDelayMsg = document.getElementById('break-delay-msg');
-
-        function updateBreakTimer() {
-            if (!inBreak) {
-                return;
-            }
-            const now = Date.now();
-            totalBreakMs = now - breakStart;
-            const totalMinutes = Math.floor(totalBreakMs / 60000);
-            const totalSeconds = Math.floor((totalBreakMs % 60000) / 1000);
-            breakTimerEl.textContent = `${totalMinutes}:${String(totalSeconds).padStart(2, '0')}`;
-        }
-
-        breakBtn.addEventListener('click', () => {
             if (!inBreak) {
                 inBreak = true;
-                breakStart = Date.now();
-                breakBtn.textContent = 'End Break';
-                breakBtn.classList.remove('bg-green-600', 'hover:bg-green-500');
-                breakBtn.classList.add('bg-red-600', 'hover:bg-red-500');
-                breakDelayMsg.textContent = 'Break timer started.';
-                breakTimerInterval = setInterval(updateBreakTimer, 1000);
+                breakStart = new Date();
+                btn.textContent = 'End Break';
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-red-600');
+
+                breakTimerInterval = setInterval(() => {
+                    const elapsed = new Date() - breakStart;
+                    timer.textContent = `${Math.floor(elapsed / 60000)}m ${Math.floor((elapsed % 60000) / 1000)}s`;
+                }, 1000);
+
             } else {
                 inBreak = false;
-                breakBtn.textContent = 'Start Break';
-                breakBtn.classList.remove('bg-red-600', 'hover:bg-red-500');
-                breakBtn.classList.add('bg-green-600', 'hover:bg-green-500');
                 clearInterval(breakTimerInterval);
-                breakDelayMsg.textContent = `Total break time: ${Math.floor(totalBreakMs / 60000)} minutes.`;
+                const elapsed = new Date() - breakStart;
+                totalBreakMs += elapsed;
+                btn.textContent = 'Start Break';
+                btn.classList.remove('bg-red-600');
+                btn.classList.add('bg-green-600');
+                timer.textContent = '';
+                msg.textContent = `Schedule delayed by ${Math.floor(totalBreakMs / 60000)} minutes. Click "Create My Schedule" to apply the change.`;
             }
-        });
-        
-        // Initial render
-        window.onload = () => {
-            renderWeek();
-        };
+        }
 
+        document.getElementById('prev-week').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); };
+        document.getElementById('next-week').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); };
+        document.getElementById('add-custom').onclick = () => {
+            const val = document.getElementById('custom-task-input').value.trim();
+            if (val) {
+                const taskId = crypto.randomUUID();
+                const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
+                const isDueNextSchoolDay = true;
+                const taskData = { id: taskId, name: val, cls: "Custom", time: 30, done: false, isTonight: true, date: nextSchoolDay };
+                
+                addTaskToDb(taskData);
+                document.getElementById('custom-task-input').value = '';
+            }
+        };
+        document.getElementById('current-time').onclick = () => {
+            document.getElementById('schedule-start-time-input').value = new Date().toTimeString().slice(0, 5);
+        };
+        document.getElementById('generate-schedule').onclick = generateSchedule;
+        document.getElementById('break-btn').onclick = toggleBreak;
+        
+        renderWeek();
     </script>
 </body>
 </html>
