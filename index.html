@@ -172,14 +172,8 @@
         // Firebase Initialization
         let firebaseConfig;
         if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            firebaseConfig = JSON.parse(__firebase_config);
-        } else {
-            console.error("Firebase config not found. Data will not be saved.");
-            showMessage("Failed to connect to the database. Your data will not be saved.");
-        }
-
-        if (firebaseConfig) {
             try {
+                firebaseConfig = JSON.parse(__firebase_config);
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -197,6 +191,9 @@
                 console.error("Firebase initialization failed:", e);
                 showMessage("Failed to connect to the database. Your data will not be saved.");
             }
+        } else {
+            console.error("Firebase config not found. Data will not be saved.");
+            showMessage("Failed to connect to the database. Your data will not be saved.");
         }
 
         // Auth State Listener
