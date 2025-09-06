@@ -403,39 +403,82 @@
                 title.className = 'text-xl font-semibold text-center mb-4 whitespace-nowrap';
                 title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
                 card.appendChild(title);
+                
                 classes.forEach(cls => {
                     const section = document.createElement('div');
                     section.className = 'mb-3';
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center justify-between mb-2';
                     const label = document.createElement('p');
                     label.className = `font-medium ${subjectColors[cls]}`;
                     label.textContent = cls;
-                    section.appendChild(label);
-                    const input = document.createElement('input');
-                    input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm';
-                    input.placeholder = 'Add assignment...';
-                    input.addEventListener('keydown', e => {
-                        if (e.key === 'Enter' && e.target.value.trim() !== '') {
-                            const taskName = e.target.value.trim();
-                            const taskId = crypto.randomUUID();
-                            const isDueNextSchoolDay = day.toDateString() === nextSchoolDayString;
-                            const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: day.toDateString() };
-                            
-                            addTaskToDb(taskData);
-                            e.target.value = '';
-                        }
-                    });
-                    section.appendChild(input);
+                    header.appendChild(label);
+                    
+                    const addButton = document.createElement('button');
+                    addButton.className = 'text-gray-400 hover:text-blue-400 transition transform hover:scale-110';
+                    addButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>`;
+                    addButton.onclick = () => {
+                        addNewInput(ul, day.toDateString(), cls);
+                    };
+                    header.appendChild(addButton);
+                    
+                    section.appendChild(header);
+                    
                     const ul = document.createElement('ul');
                     ul.id = `${day.toDateString()}-${cls.replace(' ', '-')}`;
                     ul.className = 'mt-2 space-y-2';
                     section.appendChild(ul);
+                    
+                    // Add an initial input field
+                    addNewInput(ul, day.toDateString(), cls);
+
                     card.appendChild(section);
                 });
                 grid.appendChild(card);
             }
             renderAllTasks();
         }
-        
+
+        function addNewInput(ulElement, date, cls) {
+            const li = document.createElement('li');
+            li.className = 'relative flex items-center group';
+            
+            const input = document.createElement('input');
+            input.className = 'w-full bg-gray-700/50 p-2 pr-10 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
+            input.placeholder = 'Add assignment...';
+            input.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                    const taskName = e.target.value.trim();
+                    const taskId = crypto.randomUUID();
+                    const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
+                    const isDueNextSchoolDay = date === nextSchoolDay;
+                    const taskData = { id: taskId, name: taskName, cls: cls, time: 30, done: false, isTonight: isDueNextSchoolDay, date: date };
+                    
+                    addTaskToDb(taskData);
+                    e.target.value = '';
+                    // Create a new input field after adding the task
+                    addNewInput(ulElement, date, cls);
+                    
+                }
+            });
+            
+            const clearButton = document.createElement('button');
+            clearButton.className = 'absolute right-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition';
+            clearButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+            clearButton.onclick = () => {
+                if (ulElement.querySelectorAll('li').length > 1) {
+                    li.remove();
+                } else {
+                    input.value = '';
+                }
+            };
+
+            li.appendChild(input);
+            li.appendChild(clearButton);
+            ulElement.appendChild(li);
+            input.focus();
+        }
+
         function addAndRenderTaskElement(ul, taskData) {
             const li = document.createElement('li');
             li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
@@ -494,10 +537,21 @@
                 Object.keys(tasks[day]).forEach(cls => {
                     const ul = document.getElementById(`${day}-${cls.replace(' ', '-')}`);
                     if (!ul) return;
-                    ul.innerHTML = '';
+                    ul.innerHTML = ''; // Clear all existing tasks
+                    
+                    // Filter out any "ghost" input fields and re-render only the inputs that haven't been submitted
+                    const inputField = document.getElementById(`input-${day}-${cls.replace(' ', '-')}`);
+                    if (inputField) {
+                         const parentLi = inputField.closest('li');
+                         parentLi.remove();
+                    }
+
                     tasks[day][cls].forEach(t => {
                         addAndRenderTaskElement(ul, t);
                     });
+
+                    // Add a new input field at the end for new tasks
+                    addNewInput(ul, day, cls);
                 });
             });
         }
