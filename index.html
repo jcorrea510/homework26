@@ -270,6 +270,9 @@
             try {
                 const taskDocRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId);
                 await deleteDoc(taskDocRef);
+                // After deleting from the database, force a re-render to clear the UI immediately.
+                renderAllTasks();
+                renderTonight();
             } catch (error) {
                 console.error("Error deleting task:", error);
                 showMessage("Failed to delete task. Please check the console for details.");
@@ -481,7 +484,8 @@
                     if (!ul) return;
                     ul.innerHTML = ''; // Clear all existing tasks
                     
-                    tasks[day][cls].forEach(t => {
+                    const dayTasks = tasks[day][cls] || [];
+                    dayTasks.forEach(t => {
                         addAndRenderTaskElement(ul, t);
                     });
                 });
