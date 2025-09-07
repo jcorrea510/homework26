@@ -179,6 +179,60 @@
             --subject-custom: #f472b6;
         }
 
+        .forest-theme {
+            --bg-color: #1a2f1b;
+            --text-color: #e0e7e0;
+            --container-bg: #2c422d;
+            --card-bg: #3a503b;
+            --card-border: #5a775b;
+            --header-primary: #95d469;
+            --header-secondary: #c2d16a;
+            --button-primary-bg: #4a6f4b;
+            --button-primary-hover-bg: #5c845d;
+            --button-primary-text: #e0e7e0;
+            --button-secondary-bg: #3a503b;
+            --button-secondary-hover-bg: #4a6f4b;
+            --button-secondary-text: #d1d5d1;
+            --input-bg: #2c422d;
+            --input-text: #e0e7e0;
+            --input-border: #5a775b;
+            --link-color: #95d469;
+            --subject-math: #d4e069;
+            --subject-english: #e8d070;
+            --subject-spanish: #849e71;
+            --subject-comp-sci: #69a3d4;
+            --subject-hota: #d48169;
+            --subject-physics: #70e8a7;
+            --subject-custom: #c78869;
+        }
+
+        .sunset-theme {
+            --bg-color: #2b2b2b;
+            --text-color: #f7e6e1;
+            --container-bg: #3c3c3c;
+            --card-bg: #4c4c4c;
+            --card-border: #6d6d6d;
+            --header-primary: #e66a4f;
+            --header-secondary: #e6a759;
+            --button-primary-bg: #d95e4d;
+            --button-primary-hover-bg: #e07662;
+            --button-primary-text: #fff;
+            --button-secondary-bg: #4c4c4c;
+            --button-secondary-hover-bg: #5c5c5c;
+            --button-secondary-text: #e6e6e6;
+            --input-bg: #3c3c3c;
+            --input-text: #f7e6e1;
+            --input-border: #6d6d6d;
+            --link-color: #e6a759;
+            --subject-math: #f07b7b;
+            --subject-english: #f0c37b;
+            --subject-spanish: #f07baf;
+            --subject-comp-sci: #7b99f0;
+            --subject-hota: #f0b57b;
+            --subject-physics: #7bf0a9;
+            --subject-custom: #b57bf0;
+        }
+
         .subject-math { color: var(--subject-math); }
         .subject-english { color: var(--subject-english); }
         .subject-spanish { color: var(--subject-spanish); }
@@ -192,7 +246,7 @@
 <body class="dark-theme">
     <div class="app-container min-h-screen p-4 md:p-8">
         <!-- Main Content Wrapper -->
-        <div class="max-w-7xl mx-auto">
+        <div id="main-content-wrapper" class="w-full">
             <!-- Header with a clean, modern design -->
             <header class="flex justify-between items-start mb-6">
                 <div>
@@ -292,6 +346,8 @@
                     <button id="theme-dark" class="px-4 py-2 rounded-lg font-semibold button-secondary">Dark</button>
                     <button id="theme-light" class="px-4 py-2 rounded-lg font-semibold button-secondary">Light</button>
                     <button id="theme-ocean" class="px-4 py-2 rounded-lg font-semibold button-secondary">Ocean</button>
+                    <button id="theme-forest" class="px-4 py-2 rounded-lg font-semibold button-secondary">Forest</button>
+                    <button id="theme-sunset" class="px-4 py-2 rounded-lg font-semibold button-secondary">Sunset</button>
                 </div>
             </div>
         </div>
@@ -322,7 +378,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         setLogLevel('debug');
@@ -363,6 +419,7 @@
         const tonightList = document.getElementById('tonight-list');
         const settingsModal = document.getElementById('settings-modal');
         const usernameInput = document.getElementById('username-input');
+        const mainContentWrapper = document.getElementById('main-content-wrapper');
 
         function initializeSortable() {
              if (sortableTonight) {
@@ -637,7 +694,6 @@
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
             const authModal = document.getElementById('auth-modal');
-            const appContainer = document.querySelector('.app-container');
 
             if (user) {
                 userId = user.uid;
@@ -646,7 +702,7 @@
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
                 
                 authModal.classList.add('hidden');
-                appContainer.style.display = 'block';
+                mainContentWrapper.classList.remove('hidden');
 
                 if (unsubscribeTasks) {
                     unsubscribeTasks();
@@ -693,7 +749,8 @@
                 authButton.textContent = 'Log In / Sign Up';
                 userInfo.textContent = 'Not signed in';
                 authButton.onclick = () => showAuthModal('login');
-                appContainer.style.display = 'none';
+                mainContentWrapper.classList.add('hidden');
+                authModal.classList.remove('hidden');
 
                 document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
                 tasksCache = {};
@@ -813,9 +870,9 @@
 
         authForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = authUsernameInput.value;
-            const password = authPasswordInput.value;
-            const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@homewrok-hub.com`;
+            const username = authUsernameInput.value.trim();
+            const password = authPasswordInput.value.trim();
+            const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@homewrok-hub-app.com`;
             authErrorMsg.textContent = '';
 
             try {
@@ -830,10 +887,11 @@
             } catch (error) {
                 let message = "An error occurred. Please try again.";
                 switch (error.code) {
-                    case "auth/invalid-email": message = "Invalid username format."; break;
-                    case "auth/user-disabled": message = "This user account has been disabled."; break;
-                    case "auth/user-not-found": message = "No account found with this username."; break;
+                    case "auth/invalid-email":
+                    case "auth/invalid-credential":
+                    case "auth/user-not-found": message = "Incorrect username or password."; break;
                     case "auth/wrong-password": message = "Incorrect password."; break;
+                    case "auth/user-disabled": message = "This user account has been disabled."; break;
                     case "auth/email-already-in-use": message = "This username is already in use."; break;
                     case "auth/weak-password": message = "Password should be at least 6 characters."; break;
                     default: console.error("Authentication error:", error);
@@ -909,6 +967,12 @@
         });
         document.getElementById('theme-ocean').addEventListener('click', () => {
             document.body.className = 'ocean-theme';
+        });
+        document.getElementById('theme-forest').addEventListener('click', () => {
+            document.body.className = 'forest-theme';
+        });
+        document.getElementById('theme-sunset').addEventListener('click', () => {
+            document.body.className = 'sunset-theme';
         });
 
         document.getElementById('save-username-btn').addEventListener('click', async () => {
