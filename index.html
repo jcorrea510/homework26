@@ -411,6 +411,11 @@
                         const updatedScheduleData = [...currentScheduleData];
                         updatedScheduleData[taskIndex].checked = !updatedScheduleData[taskIndex].checked;
                         saveScheduleToDb(updatedScheduleData);
+
+                        // FIX: Update the `done` status of the task in the main task list
+                        const taskId = updatedScheduleData[taskIndex].id;
+                        const isDone = updatedScheduleData[taskIndex].checked;
+                        updateTaskInDb(taskId, { done: isDone });
                     }
                 });
                 schedule.appendChild(li);
