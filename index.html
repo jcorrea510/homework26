@@ -88,8 +88,8 @@
             </div>
         </div>
 
-        <!-- Calendar Grid -->
-        <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10"></div>
+        <!-- Calendar Grid with adjusted styling for more space -->
+        <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 mb-10"></div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <!-- Tonight Section -->
@@ -305,15 +305,19 @@
                 const day = new Date(weekStart);
                 day.setDate(weekStart.getDate() + i);
                 const card = document.createElement('div');
-                card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
+                card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out flex flex-col';
+                
                 const title = document.createElement('h3');
                 title.className = 'text-xl font-semibold text-center mb-4 whitespace-nowrap';
                 title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
                 card.appendChild(title);
 
+                const scrollContainer = document.createElement('div');
+                scrollContainer.className = 'flex-1 overflow-y-auto pr-2';
+
                 classes.forEach(cls => {
                     const section = document.createElement('div');
-                    section.className = 'mb-3';
+                    section.className = 'mb-4';
                     const label = document.createElement('p');
                     label.className = `font-medium ${subjectColors[cls]}`;
                     label.textContent = cls;
@@ -345,8 +349,10 @@
 
                     section.appendChild(input);
                     section.appendChild(ul);
-                    card.appendChild(section);
+                    scrollContainer.appendChild(section);
                 });
+                
+                card.appendChild(scrollContainer);
                 grid.appendChild(card);
             }
 
@@ -412,7 +418,6 @@
                         updatedScheduleData[taskIndex].checked = !updatedScheduleData[taskIndex].checked;
                         saveScheduleToDb(updatedScheduleData);
 
-                        // FIX: Update the `done` status of the task in the main task list
                         const taskId = updatedScheduleData[taskIndex].id;
                         const isDone = updatedScheduleData[taskIndex].checked;
                         updateTaskInDb(taskId, { done: isDone });
@@ -438,7 +443,7 @@
             current.setHours(h, m, 0, 0);
             current = new Date(current.getTime() + totalBreakMs);
 
-            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+            const tonightTasks = Object.values(tasksCache).filter(t => t.isTonight && !t.done).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
             const newSchedule = tonightTasks.map(t => {
                 const end = new Date(current.getTime() + t.time * 60000);
