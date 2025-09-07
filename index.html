@@ -116,13 +116,6 @@
             --input-text: #e5e7eb;
             --input-border: #4b5563;
             --link-color: #60a5fa;
-            --subject-math: #f87171;
-            --subject-english: #facc15;
-            --subject-spanish: #a855f7;
-            --subject-comp-sci: #60a5fa;
-            --subject-hota: #f97316;
-            --subject-physics: #34d399;
-            --subject-custom: #f472b6;
         }
 
         .light-theme {
@@ -143,13 +136,6 @@
             --input-text: #1f2937;
             --input-border: #d1d5db;
             --link-color: #2563eb;
-            --subject-math: #dc2626;
-            --subject-english: #d97706;
-            --subject-spanish: #7e22ce;
-            --subject-comp-sci: #2563eb;
-            --subject-hota: #ea580c;
-            --subject-physics: #047857;
-            --subject-custom: #be185d;
         }
         
         .ocean-theme {
@@ -170,13 +156,6 @@
             --input-text: #e0f2fe;
             --input-border: #2c5282;
             --link-color: #85d0ff;
-            --subject-math: #f87171;
-            --subject-english: #facc15;
-            --subject-spanish: #a855f7;
-            --subject-comp-sci: #60a5fa;
-            --subject-hota: #f97316;
-            --subject-physics: #34d399;
-            --subject-custom: #f472b6;
         }
 
         .forest-theme {
@@ -197,13 +176,6 @@
             --input-text: #e0e7e0;
             --input-border: #5a775b;
             --link-color: #95d469;
-            --subject-math: #d4e069;
-            --subject-english: #e8d070;
-            --subject-spanish: #849e71;
-            --subject-comp-sci: #69a3d4;
-            --subject-hota: #d48169;
-            --subject-physics: #70e8a7;
-            --subject-custom: #c78869;
         }
 
         .sunset-theme {
@@ -224,22 +196,14 @@
             --input-text: #f7e6e1;
             --input-border: #6d6d6d;
             --link-color: #e6a759;
-            --subject-math: #f07b7b;
-            --subject-english: #f0c37b;
-            --subject-spanish: #f07baf;
-            --subject-comp-sci: #7b99f0;
-            --subject-hota: #f0b57b;
-            --subject-physics: #7bf0a9;
-            --subject-custom: #b57bf0;
         }
 
-        .subject-math { color: var(--subject-math); }
-        .subject-english { color: var(--subject-english); }
-        .subject-spanish { color: var(--subject-spanish); }
-        .subject-comp-sci { color: var(--subject-comp-sci); }
-        .subject-hota { color: var(--subject-hota); }
-        .subject-physics { color: var(--subject-physics); }
-        .subject-custom { color: var(--subject-custom); }
+        /* Dynamically created color classes from JS */
+        /*
+            .subject-math { color: ... }
+            .subject-english { color: ... }
+            ...
+        */
 
     </style>
 </head>
@@ -350,6 +314,19 @@
                     <button id="theme-sunset" class="px-4 py-2 rounded-lg font-semibold button-secondary">Sunset</button>
                 </div>
             </div>
+            
+            <!-- New section for subject management -->
+            <div class="mb-4">
+                <p class="font-semibold mb-2">Manage Subjects</p>
+                <div class="flex flex-col gap-2">
+                    <div class="flex gap-2">
+                        <input type="text" id="new-subject-name" placeholder="Subject Name" class="flex-1 p-2 rounded-lg input-style">
+                        <input type="color" id="new-subject-color" value="#60a5fa" class="h-10 w-10 p-1 rounded-lg border-2 input-style cursor-pointer">
+                        <button id="add-subject-btn" class="px-4 py-2 button-primary rounded-lg font-semibold">Add</button>
+                    </div>
+                    <ul id="subjects-list" class="mt-2 space-y-2 max-h-40 overflow-y-auto"></ul>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -378,12 +355,21 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         setLogLevel('debug');
 
-        const classes = ["Math", "English", "Spanish", "Comp Sci", "HOTA", "Physics"];
+        const DEFAULT_SUBJECTS = {
+            "Math": "#f87171",
+            "English": "#facc15",
+            "Spanish": "#a855f7",
+            "Comp Sci": "#60a5fa",
+            "HOTA": "#f97316",
+            "Physics": "#34d399",
+        };
+        
+        let subjects = {};
         let weekStart = getStartOfWeek(new Date());
         let inBreak = false;
         let breakStart = null;
@@ -395,6 +381,7 @@
         let currentScheduleData = [];
         let unsubscribeTasks = null;
         let unsubscribeSchedule = null;
+        let unsubscribeSubjects = null;
         let sortableTonight = null;
 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
@@ -411,6 +398,48 @@
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
+
+            onAuthStateChanged(auth, async (user) => {
+                const authButton = document.getElementById('auth-button');
+                const userInfoSpan = document.getElementById('user-info');
+                
+                if (user) {
+                    userId = user.uid;
+                    authButton.textContent = 'Sign Out';
+                    authButton.onclick = async () => {
+                        await signOut(auth);
+                        userId = null;
+                        tasksCache = {};
+                        currentScheduleData = [];
+                        if (unsubscribeTasks) unsubscribeTasks();
+                        if (unsubscribeSchedule) unsubscribeSchedule();
+                        if (unsubscribeSubjects) unsubscribeSubjects();
+                        renderAll();
+                    };
+
+                    const userProfileDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/profile`);
+                    const userProfile = await getDoc(userProfileDocRef);
+                    if (userProfile.exists()) {
+                         userInfoSpan.textContent = `Welcome, ${userProfile.data().username}!`;
+                    } else {
+                         userInfoSpan.textContent = `User ID: ${userId.slice(0, 6)}...`;
+                    }
+
+                    // --- Start of Fix ---
+                    fetchAndRenderSubjects();
+                    fetchAndRenderTasks();
+                    fetchAndRenderSchedule();
+                    // --- End of Fix ---
+                } else {
+                    userId = null;
+                    authButton.textContent = 'Log In';
+                    authButton.onclick = () => showAuthModal('login');
+                    userInfoSpan.textContent = '';
+                    tasksCache = {};
+                    currentScheduleData = [];
+                    renderAll();
+                }
+            });
         } catch (e) {
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
@@ -420,6 +449,9 @@
         const settingsModal = document.getElementById('settings-modal');
         const usernameInput = document.getElementById('username-input');
         const mainContentWrapper = document.getElementById('main-content-wrapper');
+        const subjectsList = document.getElementById('subjects-list');
+        const newSubjectNameInput = document.getElementById('new-subject-name');
+        const newSubjectColorInput = document.getElementById('new-subject-color');
 
         function initializeSortable() {
              if (sortableTonight) {
@@ -438,21 +470,21 @@
                  },
              });
         }
-
-        const subjectColors = {
-            "Math": "subject-math",
-            "English": "subject-english",
-            "Spanish": "subject-spanish",
-            "Comp Sci": "subject-comp-sci",
-            "HOTA": "subject-hota",
-            "Physics": "subject-physics",
-            "Custom": "subject-custom"
-        };
         
         function createTaskLi(taskData, type) {
             const li = document.createElement('li');
             li.dataset.id = taskData.id;
             li.className = `flex justify-between items-center card rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
+
+            const subjectColor = subjects[taskData.cls] || '#ffffff';
+            const dynamicColorClass = `text-custom-${taskData.cls.replace(/\s/g, '-')}`;
+            // Add a style tag with the dynamic color if it doesn't exist
+            if (!document.getElementById(`style-${dynamicColorClass}`)) {
+                const style = document.createElement('style');
+                style.id = `style-${dynamicColorClass}`;
+                style.innerHTML = `.${dynamicColorClass} { color: ${subjectColor}; }`;
+                document.head.appendChild(style);
+            }
 
             let content = '';
             if (type === 'calendar') {
@@ -462,7 +494,7 @@
                             ${taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
                         </button>
                         <span class="${taskData.done ? 'line-through text-gray-400' : ''}">
-                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">${taskData.cls}</span>
+                            <span class="${dynamicColorClass} font-bold mr-1">[${taskData.cls}]</span> ${taskData.name}
                         </span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -481,7 +513,7 @@
                             ${taskData.done ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
                         </button>
                         <span class="text-base font-medium ${taskData.done ? 'line-through text-gray-400' : 'text-white'}">
-                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">[${taskData.cls}]</span> ${taskData.name}
+                            <span class="${dynamicColorClass} font-bold mr-1">[${taskData.cls}]</span> ${taskData.name}
                         </span>
                     </div>
                     <div class="flex items-center gap-2 text-sm text-gray-400 font-light">
@@ -522,12 +554,16 @@
             renderWeek();
             renderTonightList();
             updateCounts();
+            renderSubjectsInSettings();
+            renderSchedule();
         }
 
         function renderWeek() {
             document.getElementById('week-label').textContent = `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
             const grid = document.getElementById('calendar-grid');
             grid.innerHTML = ''; // Clear and rebuild calendar grid structure
+
+            const subjectNames = Object.keys(subjects);
 
             for (let i = 0; i < 5; i++) {
                 const day = new Date(weekStart);
@@ -539,11 +575,11 @@
                 title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
                 card.appendChild(title);
 
-                classes.forEach(cls => {
+                subjectNames.forEach(cls => {
                     const section = document.createElement('div');
                     section.className = 'mb-3';
                     const label = document.createElement('p');
-                    label.className = `font-medium ${subjectColors[cls]}`;
+                    label.className = `font-medium text-custom-${cls.replace(/\s/g, '-')}`;
                     label.textContent = cls;
                     section.appendChild(label);
 
@@ -616,6 +652,16 @@
                 const li = document.createElement('li');
                 li.dataset.id = t.id;
                 li.className = `card p-4 rounded-xl shadow-md fade-in`;
+                
+                const subjectColor = subjects[t.cls] || '#ffffff';
+                const dynamicColorClass = `text-custom-${t.cls.replace(/\s/g, '-')}`;
+                if (!document.getElementById(`style-${dynamicColorClass}`)) {
+                    const style = document.createElement('style');
+                    style.id = `style-${dynamicColorClass}`;
+                    style.innerHTML = `.${dynamicColorClass} { color: ${subjectColor}; }`;
+                    document.head.appendChild(style);
+                }
+
                 li.innerHTML = `
                     <div class="flex items-center gap-3">
                         <button class="schedule-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.checked ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
@@ -623,7 +669,7 @@
                         </button>
                         <div>
                             <p class="font-semibold text-lg ${t.checked ? 'line-through text-gray-400' : 'text-white'}">
-                                <span class="${subjectColors[t.cls]} font-bold mr-1">[${t.cls}]</span> ${t.name}
+                                <span class="${dynamicColorClass} font-bold mr-1">[${t.cls}]</span> ${t.name}
                             </p>
                             <p class="text-sm text-gray-400 mt-1">
                                 <span class="font-medium">${t.start}</span>
@@ -689,84 +735,129 @@
                 showMessage("Failed to save schedule. Please check the console for details.");
             }
         }
+        
+        async function fetchAndRenderSubjects() {
+            if (!userId || !db) return;
 
-        onAuthStateChanged(auth, async (user) => {
-            const authButton = document.getElementById('auth-button');
-            const userInfo = document.getElementById('user-info');
-            const authModal = document.getElementById('auth-modal');
-
-            if (user) {
-                userId = user.uid;
-                authButton.textContent = 'Sign Out';
-                userInfo.textContent = `User ID: ${userId}`;
-                authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
-                
-                authModal.classList.add('hidden');
-                mainContentWrapper.classList.remove('hidden');
-
-                if (unsubscribeTasks) {
-                    unsubscribeTasks();
+            const subjectsDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/subjects`);
+            if (unsubscribeSubjects) unsubscribeSubjects();
+            unsubscribeSubjects = onSnapshot(subjectsDocRef, async (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    subjects = docSnapshot.data().list || {};
+                } else {
+                    await setDoc(subjectsDocRef, { list: DEFAULT_SUBJECTS });
+                    subjects = DEFAULT_SUBJECTS;
                 }
-                if (unsubscribeSchedule) {
-                    unsubscribeSchedule();
-                }
+                renderAll();
+            }, (error) => {
+                console.error("Error fetching subjects:", error);
+            });
+        }
 
-                const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
-                unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-                    tasksCache = {};
-                    snapshot.docs.forEach(doc => {
-                        const taskData = { id: doc.id, ...doc.data() };
-                        tasksCache[taskData.id] = taskData;
-                    });
-                    renderAll();
-                }, (error) => {
-                    console.error("Error fetching tasks:", error);
-                    showMessage("Failed to load your data from the database. Please try again later.");
-                });
-
-                const scheduleDocRef = doc(db, `artifacts/${appId}/users/${userId}/data/schedule`);
-                unsubscribeSchedule = onSnapshot(scheduleDocRef, (docSnapshot) => {
-                    if (docSnapshot.exists()) {
-                        currentScheduleData = docSnapshot.data().tasks || [];
-                    } else {
-                        currentScheduleData = [];
-                    }
-                    renderSchedule();
-                }, (error) => {
-                    console.error("Error fetching schedule:", error);
-                    showMessage("Failed to load your schedule from the database.");
-                });
-                
-                // Fetch username if it exists
-                const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/profile`);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    usernameInput.value = userDoc.data().username || '';
-                }
-
-            } else {
-                userId = null;
-                authButton.textContent = 'Log In / Sign Up';
-                userInfo.textContent = 'Not signed in';
-                authButton.onclick = () => showAuthModal('login');
-                mainContentWrapper.classList.add('hidden');
-                authModal.classList.remove('hidden');
-
-                document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
+        async function fetchAndRenderTasks() {
+            if (!userId || !db) return;
+            const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+            if (unsubscribeTasks) unsubscribeTasks();
+            unsubscribeTasks = onSnapshot(tasksRef, (querySnapshot) => {
                 tasksCache = {};
-                currentScheduleData = [];
-                renderSchedule();
-                updateCounts();
-                if (unsubscribeTasks) {
-                    unsubscribeTasks();
-                    unsubscribeTasks = null;
+                querySnapshot.forEach(doc => {
+                    tasksCache[doc.id] = doc.data();
+                });
+                renderAll();
+            }, (error) => {
+                console.error("Error fetching tasks:", error);
+            });
+        }
+
+        async function fetchAndRenderSchedule() {
+            if (!userId || !db) return;
+            const scheduleDocRef = doc(db, `artifacts/${appId}/users/${userId}/data/schedule`);
+            if (unsubscribeSchedule) unsubscribeSchedule();
+            unsubscribeSchedule = onSnapshot(scheduleDocRef, (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    currentScheduleData = docSnapshot.data().tasks || [];
+                } else {
+                    currentScheduleData = [];
                 }
-                if (unsubscribeSchedule) {
-                    unsubscribeSchedule();
-                    unsubscribeSchedule = null;
-                }
+                renderAll();
+            }, (error) => {
+                console.error("Error fetching schedule:", error);
+            });
+        }
+        
+        function renderSubjectsInSettings() {
+            subjectsList.innerHTML = '';
+            for (const name in subjects) {
+                if (DEFAULT_SUBJECTS[name]) continue; // Skip default subjects from being edited/deleted
+                const color = subjects[name];
+                const li = document.createElement('li');
+                li.className = `flex justify-between items-center card rounded-lg px-3 py-2 text-sm fade-in`;
+                li.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full border-2 border-gray-400" style="background-color: ${color};"></span>
+                        <span>${name}</span>
+                    </div>
+                    <button class="delete-subject-btn text-red-500 hover:text-red-400 transition" data-subject="${name}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" /></svg>
+                    </button>
+                `;
+                li.querySelector('.delete-subject-btn').addEventListener('click', async (e) => {
+                    const subjectToDelete = e.target.dataset.subject;
+                    if (confirm(`Are you sure you want to delete the subject "${subjectToDelete}"?`)) {
+                        await deleteSubjectFromDb(subjectToDelete);
+                    }
+                });
+                subjectsList.appendChild(li);
             }
-        });
+        }
+
+        async function addSubjectToDb(name, color) {
+            if (!userId) {
+                showMessage("Please log in to add subjects.");
+                return;
+            }
+            if (!name) {
+                showMessage("Subject name cannot be empty.");
+                return;
+            }
+            if (subjects[name]) {
+                showMessage("This subject already exists.");
+                return;
+            }
+
+            try {
+                const subjectsDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/subjects`);
+                await updateDoc(subjectsDocRef, {
+                    [`list.${name}`]: color
+                });
+                newSubjectNameInput.value = '';
+                newSubjectColorInput.value = '#60a5fa';
+            } catch (error) {
+                console.error("Error adding subject:", error);
+                showMessage("Failed to add subject. Please try again.");
+            }
+        }
+
+        async function deleteSubjectFromDb(name) {
+            if (!userId) return;
+            try {
+                const subjectsDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/subjects`);
+                await updateDoc(subjectsDocRef, {
+                    [`list.${name}`]: deleteDoc()
+                });
+                // Find and update any tasks with this subject
+                const tasksToDelete = Object.values(tasksCache).filter(task => task.cls === name);
+                const batch = writeBatch(db);
+                tasksToDelete.forEach(task => {
+                     const taskRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, task.id);
+                     batch.update(taskRef, { cls: 'Custom' });
+                });
+                await batch.commit();
+            } catch (error) {
+                console.error("Error deleting subject:", error);
+                showMessage("Failed to delete subject. Please try again.");
+            }
+        }
 
         async function addTaskToDb(taskData) {
             if (!userId || !db) {
@@ -993,6 +1084,12 @@
                 }
             }
         });
+        
+        document.getElementById('add-subject-btn').addEventListener('click', () => {
+            const name = newSubjectNameInput.value.trim();
+            const color = newSubjectColorInput.value;
+            addSubjectToDb(name, color);
+        });
 
 
         document.getElementById('prev-week').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderAll(); };
@@ -1013,8 +1110,6 @@
         };
         document.getElementById('generate-schedule').onclick = createAndSaveSchedule;
         document.getElementById('break-btn').onclick = toggleBreak;
-
-        renderWeek();
     </script>
 </body>
 </html>
