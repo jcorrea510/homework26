@@ -57,14 +57,14 @@
         }
     </style>
 </head>
-<body class="bg-gray-950 text-white min-h-screen p-6 md:p-12">
-    <div class="max-w-7xl mx-auto">
+<body class="bg-gray-950 text-white min-h-screen">
+    <div class="p-6 md:p-12 max-w-7xl mx-auto">
         <!-- Header with a clean, modern design -->
         <header class="text-center mb-10">
             <h1 class="text-4xl md:text-6xl font-extrabold text-blue-400 drop-shadow-lg">Homework Hub</h1>
             <p class="text-gray-400 text-lg mt-2 font-light">Organize tasks, plan your evening, and stay on top of your work.</p>
         </header>
-
+        
         <!-- Authentication and User Info -->
         <div class="flex justify-end items-center mb-6 gap-4">
             <span id="user-info" class="text-gray-400 text-sm"></span>
@@ -88,10 +88,11 @@
             </div>
         </div>
     </div>
-        <!-- Calendar Grid with adjusted styling for more space -->
-        <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 md:gap-8 mb-10 px-6 md:px-12 lg:px-24"></div>
 
-    <div class="max-w-7xl mx-auto">
+    <!-- Calendar Grid with adjusted styling for more space -->
+    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 md:gap-8 mb-10 px-6 md:px-12 lg:px-24"></div>
+
+    <div class="px-6 md:px-12 max-w-7xl mx-auto">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <!-- Tonight Section -->
             <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
