@@ -21,6 +21,47 @@
         }
         ::-webkit-scrollbar-track { background-color: #1f2937; }
 
+        /* General styles using CSS variables for themes */
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        .app-container {
+            background-color: var(--container-bg);
+        }
+        .card {
+            background-color: var(--card-bg);
+            border-color: var(--card-border);
+        }
+        .text-header-primary {
+            color: var(--header-primary);
+        }
+        .text-header-secondary {
+            color: var(--header-secondary);
+        }
+        .button-primary {
+            background-color: var(--button-primary-bg);
+            color: var(--button-primary-text);
+        }
+        .button-primary:hover {
+            background-color: var(--button-primary-hover-bg);
+        }
+        .button-secondary {
+            background-color: var(--button-secondary-bg);
+            color: var(--button-secondary-text);
+        }
+        .button-secondary:hover {
+            background-color: var(--button-secondary-hover-bg);
+        }
+        .input-style {
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            border-color: var(--input-border);
+        }
+        .link-text {
+            color: var(--link-color);
+        }
+
         /* Modal styles */
         .modal-overlay {
             position: fixed;
@@ -37,7 +78,7 @@
         }
 
         .modal-content {
-            background-color: #1f2937;
+            background-color: var(--card-bg);
             padding: 2rem;
             border-radius: 1rem;
             text-align: center;
@@ -55,75 +96,203 @@
         .sortable-drag {
             opacity: 0 !important;
         }
+
+        /* Theme variables */
+        .dark-theme {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --container-bg: #161b22;
+            --card-bg: #1f2937;
+            --card-border: #374151;
+            --header-primary: #60a5fa;
+            --header-secondary: #a855f7;
+            --button-primary-bg: #2563eb;
+            --button-primary-hover-bg: #3b82f6;
+            --button-primary-text: #e0f2fe;
+            --button-secondary-bg: #374151;
+            --button-secondary-hover-bg: #4b5563;
+            --button-secondary-text: #d1d5db;
+            --input-bg: #111827;
+            --input-text: #e5e7eb;
+            --input-border: #4b5563;
+            --link-color: #60a5fa;
+            --subject-math: #f87171;
+            --subject-english: #facc15;
+            --subject-spanish: #a855f7;
+            --subject-comp-sci: #60a5fa;
+            --subject-hota: #f97316;
+            --subject-physics: #34d399;
+            --subject-custom: #f472b6;
+        }
+
+        .light-theme {
+            --bg-color: #f3f4f6;
+            --text-color: #1f2937;
+            --container-bg: #ffffff;
+            --card-bg: #e5e7eb;
+            --card-border: #d1d5db;
+            --header-primary: #3b82f6;
+            --header-secondary: #9333ea;
+            --button-primary-bg: #2563eb;
+            --button-primary-hover-bg: #3b82f6;
+            --button-primary-text: #ffffff;
+            --button-secondary-bg: #d1d5db;
+            --button-secondary-hover-bg: #a1a1aa;
+            --button-secondary-text: #1f2937;
+            --input-bg: #ffffff;
+            --input-text: #1f2937;
+            --input-border: #d1d5db;
+            --link-color: #2563eb;
+            --subject-math: #dc2626;
+            --subject-english: #d97706;
+            --subject-spanish: #7e22ce;
+            --subject-comp-sci: #2563eb;
+            --subject-hota: #ea580c;
+            --subject-physics: #047857;
+            --subject-custom: #be185d;
+        }
+        
+        .ocean-theme {
+            --bg-color: #0b1a2d;
+            --text-color: #c0e6ff;
+            --container-bg: #112a45;
+            --card-bg: #112a45;
+            --card-border: #2c5282;
+            --header-primary: #85d0ff;
+            --header-secondary: #93c5fd;
+            --button-primary-bg: #2c5282;
+            --button-primary-hover-bg: #4c7cbf;
+            --button-primary-text: #e0f2fe;
+            --button-secondary-bg: #1a3451;
+            --button-secondary-hover-bg: #2c5282;
+            --button-secondary-text: #c0e6ff;
+            --input-bg: #0b1a2d;
+            --input-text: #e0f2fe;
+            --input-border: #2c5282;
+            --link-color: #85d0ff;
+            --subject-math: #f87171;
+            --subject-english: #facc15;
+            --subject-spanish: #a855f7;
+            --subject-comp-sci: #60a5fa;
+            --subject-hota: #f97316;
+            --subject-physics: #34d399;
+            --subject-custom: #f472b6;
+        }
+
+        .subject-math { color: var(--subject-math); }
+        .subject-english { color: var(--subject-english); }
+        .subject-spanish { color: var(--subject-spanish); }
+        .subject-comp-sci { color: var(--subject-comp-sci); }
+        .subject-hota { color: var(--subject-hota); }
+        .subject-physics { color: var(--subject-physics); }
+        .subject-custom { color: var(--subject-custom); }
+
     </style>
 </head>
-<body class="bg-gray-950 text-white min-h-screen p-6 md:p-12">
-    <div class="max-w-7xl mx-auto">
-        <!-- Header with a clean, modern design -->
-        <header class="text-center mb-10">
-            <h1 class="text-4xl md:text-6xl font-extrabold text-blue-400 drop-shadow-lg">Homework Hub</h1>
-            <p class="text-gray-400 text-lg mt-2 font-light">Organize tasks, plan your evening, and stay on top of your work.</p>
-        </header>
-
-        <!-- Authentication and User Info -->
-        <div class="flex justify-end items-center mb-6 gap-4">
-            <span id="user-info" class="text-gray-400 text-sm"></span>
-            <button id="auth-button" class="px-4 py-2 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 transition">Loading...</button>
-        </div>
-
-        <!-- Week Navigation -->
-        <div class="flex flex-col md:flex-row justify-center items-center mb-8 gap-4">
-            <div class="flex items-center gap-4">
-                <button id="prev-week" class="px-4 py-3 bg-gray-800 rounded-full hover:bg-gray-700 transition transform hover:scale-105">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <h2 id="week-label" class="text-2xl font-bold text-center"></h2>
-                <button id="next-week" class="px-4 py-3 bg-gray-800 rounded-full hover:bg-gray-700 transition transform hover:scale-105">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
+<body class="dark-theme">
+    <div class="app-container min-h-screen p-4 md:p-8">
+        <!-- Main Content Wrapper -->
+        <div class="max-w-7xl mx-auto">
+            <!-- Header with a clean, modern design -->
+            <header class="flex justify-between items-start mb-6">
+                <div>
+                    <h1 class="text-4xl md:text-6xl font-extrabold text-header-primary drop-shadow-lg">Homework Hub</h1>
+                    <p class="text-gray-400 text-lg mt-2 font-light">Organize tasks, plan your evening, and stay on top of your work.</p>
+                </div>
+                <div class="flex flex-col items-end gap-2 mt-2">
+                    <button id="settings-btn" class="p-3 button-secondary rounded-full hover:rotate-90 transition-transform duration-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83l-2.6 2.6a2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V22a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-.41a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0l-2.6-2.6a2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h.41a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83l2.6-2.6a2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.41a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l2.6 2.6a2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H22a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.41a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </button>
+                    <div class="flex items-center gap-4">
+                        <span id="user-info" class="text-sm"></span>
+                        <button id="auth-button" class="px-4 py-2 button-primary rounded-xl font-semibold transition">Loading...</button>
+                    </div>
+                </div>
+            </header>
+    
+            <!-- Week Navigation -->
+            <div class="flex flex-col md:flex-row justify-center items-center mb-8 gap-4">
+                <div class="flex items-center gap-4">
+                    <button id="prev-week" class="px-4 py-3 button-secondary rounded-full transition transform hover:scale-105">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    <h2 id="week-label" class="text-2xl font-bold text-center"></h2>
+                    <button id="next-week" class="px-4 py-3 button-secondary rounded-full transition transform hover:scale-105">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+    
+            <!-- Calendar Grid -->
+            <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10"></div>
+    
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+                <!-- Tonight Section -->
+                <div class="card rounded-3xl p-6 md:p-8 shadow-2xl border">
+                    <h2 class="text-3xl font-bold mb-6 text-center text-header-primary">Tonight</h2>
+                    <ul id="tonight-list" class="space-y-4 mb-6"></ul>
+                    <div class="flex gap-2">
+                        <input id="custom-task-input" type="text" placeholder="Add a quick task..." class="flex-1 p-3 rounded-xl input-style focus:ring-2 focus:ring-blue-500 transition"/>
+                        <button id="add-custom" class="px-6 py-3 button-primary rounded-xl font-semibold transition transform hover:scale-105">Add</button>
+                    </div>
+                    <div class="mt-4 flex justify-between text-sm text-gray-400 font-light">
+                        <p>To Do: <span id="todo-count" class="font-medium text-white">0</span></p>
+                        <p>Done: <span id="done-count" class="font-medium text-white">0</span></p>
+                    </div>
+                </div>
+    
+                <!-- Schedule Section -->
+                <div class="card rounded-3xl p-6 md:p-8 shadow-2xl border">
+                    <h2 class="text-3xl font-bold mb-6 text-center text-header-secondary">Schedule</h2>
+                    <div class="flex items-center gap-2 mb-4">
+                        <label for="schedule-start-time-input" class="text-gray-400">Start Time:</label>
+                        <input type="time" id="schedule-start-time-input" class="p-2 rounded-lg input-style"/>
+                        <button id="current-time" class="px-3 py-1 button-secondary rounded-lg text-sm transition transform hover:scale-105">Current</button>
+                    </div>
+                    <button id="generate-schedule" class="w-full px-4 py-3 button-primary rounded-xl font-semibold transition transform hover:scale-105 mb-4">Create My Schedule</button>
+    
+                    <ul id="schedule-list" class="space-y-4 mb-4"></ul>
+    
+                    <!-- Separate break button and timer for full width -->
+                    <button id="break-btn" class="w-full px-4 py-3 bg-green-600 rounded-xl font-semibold hover:bg-green-500 transition transform hover:scale-105 mt-4">Start Break</button>
+                    <div class="flex justify-center items-center mt-2">
+                        <span id="break-timer" class="text-lg text-gray-400"></span>
+                    </div>
+                    <p id="break-delay-msg" class="text-sm text-center text-gray-400 mt-2"></p>
+                </div>
             </div>
         </div>
-
-        <!-- Calendar Grid -->
-        <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10"></div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-            <!-- Tonight Section -->
-            <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
-                <h2 class="text-3xl font-bold mb-6 text-center text-blue-300">Tonight</h2>
-                <ul id="tonight-list" class="space-y-4 mb-6"></ul>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="hidden modal-overlay">
+        <div class="modal-content text-left">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Settings</h2>
+                <button id="close-settings-btn" class="text-gray-400 hover:text-white transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            
+            <div class="mb-6">
+                <p class="font-semibold mb-2">Change Username</p>
                 <div class="flex gap-2">
-                    <input id="custom-task-input" type="text" placeholder="Add a quick task..." class="flex-1 bg-gray-700/50 text-gray-200 placeholder-gray-500 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 transition"/>
-                    <button id="add-custom" class="px-6 py-3 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 transition transform hover:scale-105">Add</button>
-                </div>
-                <div class="mt-4 flex justify-between text-sm text-gray-400 font-light">
-                    <p>To Do: <span id="todo-count" class="font-medium text-white">0</span></p>
-                    <p>Done: <span id="done-count" class="font-medium text-white">0</span></p>
+                    <input type="text" id="username-input" placeholder="Enter new username" class="flex-1 p-2 rounded-lg input-style"/>
+                    <button id="save-username-btn" class="px-4 py-2 button-primary rounded-lg font-semibold">Save</button>
                 </div>
             </div>
 
-            <!-- Schedule Section -->
-            <div class="bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-800">
-                <h2 class="text-3xl font-bold mb-6 text-center text-purple-300">Schedule</h2>
-                <div class="flex items-center gap-2 mb-4">
-                    <label for="schedule-start-time-input" class="text-gray-400">Start Time:</label>
-                    <input type="time" id="schedule-start-time-input" class="p-2 bg-gray-700/50 rounded-lg text-gray-200"/>
-                    <button id="current-time" class="px-3 py-1 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition transform hover:scale-105">Current</button>
+            <div class="mb-4">
+                <p class="font-semibold mb-2">Change Theme</p>
+                <div class="grid grid-cols-3 gap-2">
+                    <button id="theme-dark" class="px-4 py-2 rounded-lg font-semibold button-secondary">Dark</button>
+                    <button id="theme-light" class="px-4 py-2 rounded-lg font-semibold button-secondary">Light</button>
+                    <button id="theme-ocean" class="px-4 py-2 rounded-lg font-semibold button-secondary">Ocean</button>
                 </div>
-                <button id="generate-schedule" class="w-full px-4 py-3 bg-purple-600 rounded-xl font-semibold hover:bg-purple-500 transition transform hover:scale-105 mb-4">Create My Schedule</button>
-
-                <ul id="schedule-list" class="space-y-4 mb-4"></ul>
-
-                <!-- Separate break button and timer for full width -->
-                <button id="break-btn" class="w-full px-4 py-3 bg-green-600 rounded-xl font-semibold hover:bg-green-500 transition transform hover:scale-105 mt-4">Start Break</button>
-                <div class="flex justify-center items-center mt-2">
-                    <span id="break-timer" class="text-lg text-gray-400"></span>
-                </div>
-                <p id="break-delay-msg" class="text-sm text-center text-gray-400 mt-2"></p>
             </div>
         </div>
     </div>
@@ -132,7 +301,7 @@
     <div id="message-modal" class="hidden modal-overlay">
         <div class="modal-content">
             <p id="modal-text" class="text-lg mb-4"></p>
-            <button id="modal-close-btn" class="px-6 py-2 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 transition">OK</button>
+            <button id="modal-close-btn" class="px-6 py-2 button-primary rounded-xl font-semibold transition">OK</button>
         </div>
     </div>
 
@@ -142,17 +311,17 @@
             <h2 id="auth-title" class="text-2xl font-bold mb-4">Log In</h2>
             <p id="auth-error-msg" class="text-red-400 text-sm mb-4"></p>
             <form id="auth-form" class="space-y-4">
-                <input type="email" id="auth-email" placeholder="Email" class="w-full p-3 rounded-xl bg-gray-700/50 text-gray-200" required>
-                <input type="password" id="auth-password" placeholder="Password" class="w-full p-3 rounded-xl bg-gray-700/50 text-gray-200" required>
-                <button type="submit" id="auth-submit-btn" class="w-full px-6 py-3 bg-blue-600 rounded-xl font-semibold hover:bg-blue-500 transition">Log In</button>
+                <input type="text" id="auth-username" placeholder="Username" class="w-full p-3 rounded-xl input-style" required>
+                <input type="password" id="auth-password" placeholder="Password" class="w-full p-3 rounded-xl input-style" required>
+                <button type="submit" id="auth-submit-btn" class="w-full px-6 py-3 button-primary rounded-xl font-semibold transition">Log In</button>
             </form>
-            <button id="auth-toggle-btn" class="mt-4 text-blue-400 hover:underline">Need an account? Sign Up</button>
+            <button id="auth-toggle-btn" class="mt-4 link-text hover:underline">Need an account? Sign Up</button>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -181,7 +350,6 @@
             appId: "1:884261460141:web:dd3cceeca0c330f257ce24"
         };
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         try {
             const app = initializeApp(firebaseConfig);
@@ -193,6 +361,8 @@
         }
 
         const tonightList = document.getElementById('tonight-list');
+        const settingsModal = document.getElementById('settings-modal');
+        const usernameInput = document.getElementById('username-input');
 
         function initializeSortable() {
              if (sortableTonight) {
@@ -213,19 +383,19 @@
         }
 
         const subjectColors = {
-            "Math": "text-red-400",
-            "English": "text-yellow-400",
-            "Spanish": "text-purple-400",
-            "Comp Sci": "text-blue-400",
-            "HOTA": "text-orange-400",
-            "Physics": "text-green-400",
-            "Custom": "text-pink-400"
+            "Math": "subject-math",
+            "English": "subject-english",
+            "Spanish": "subject-spanish",
+            "Comp Sci": "subject-comp-sci",
+            "HOTA": "subject-hota",
+            "Physics": "subject-physics",
+            "Custom": "subject-custom"
         };
-
+        
         function createTaskLi(taskData, type) {
             const li = document.createElement('li');
             li.dataset.id = taskData.id;
-            li.className = `flex justify-between items-center bg-gray-800/50 rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
+            li.className = `flex justify-between items-center card rounded-xl px-3 py-2 text-sm transition hover:bg-gray-700/50 fade-in ${taskData.done ? 'opacity-50' : ''}`;
 
             let content = '';
             if (type === 'calendar') {
@@ -235,7 +405,7 @@
                             ${taskData.isTonight ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>' : ''}
                         </button>
                         <span class="${taskData.done ? 'line-through text-gray-400' : ''}">
-                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">${taskData.name}</span>
+                            <span class="${subjectColors[taskData.cls]} font-bold mr-1">${taskData.cls}</span>
                         </span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -258,7 +428,7 @@
                         </span>
                     </div>
                     <div class="flex items-center gap-2 text-sm text-gray-400 font-light">
-                        <input type="number" value="${taskData.time}" class="w-14 bg-gray-700/50 p-1 text-center rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <input type="number" value="${taskData.time}" class="w-14 p-1 text-center rounded-lg input-style">
                         <span>mins</span>
                         <button class="text-gray-400 hover:text-white transition ml-2 tonight-remove-btn">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -306,7 +476,7 @@
                 const day = new Date(weekStart);
                 day.setDate(weekStart.getDate() + i);
                 const card = document.createElement('div');
-                card.className = 'bg-gray-900 p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
+                card.className = 'card p-6 rounded-3xl shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1 duration-300 ease-in-out';
                 const title = document.createElement('h3');
                 title.className = 'text-xl font-semibold text-center mb-4 whitespace-nowrap';
                 title.textContent = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -321,7 +491,7 @@
                     section.appendChild(label);
 
                     const input = document.createElement('input');
-                    input.className = 'w-full bg-gray-700/50 p-2 rounded-xl mt-1 focus:ring-2 focus:ring-blue-500 transition text-sm text-gray-200';
+                    input.className = 'w-full p-2 rounded-xl mt-1 input-style focus:ring-2 focus:ring-blue-500 transition text-sm';
                     input.placeholder = 'Add assignment...';
                     input.dataset.date = day.toDateString();
                     input.dataset.class = cls;
@@ -388,7 +558,7 @@
             currentScheduleData.forEach(t => {
                 const li = document.createElement('li');
                 li.dataset.id = t.id;
-                li.className = `bg-gray-800 p-4 rounded-xl shadow-md fade-in`;
+                li.className = `card p-4 rounded-xl shadow-md fade-in`;
                 li.innerHTML = `
                     <div class="flex items-center gap-3">
                         <button class="schedule-checkbox-btn flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 text-transparent hover:border-green-500 transition duration-200 ease-in-out flex items-center justify-center ${t.checked ? 'bg-green-500 border-green-500' : ''}" data-id="${t.id}">
@@ -466,12 +636,17 @@
         onAuthStateChanged(auth, async (user) => {
             const authButton = document.getElementById('auth-button');
             const userInfo = document.getElementById('user-info');
+            const authModal = document.getElementById('auth-modal');
+            const appContainer = document.querySelector('.app-container');
 
             if (user) {
                 userId = user.uid;
                 authButton.textContent = 'Sign Out';
                 userInfo.textContent = `User ID: ${userId}`;
                 authButton.onclick = () => { signOut(auth); showMessage("You have been signed out."); };
+                
+                authModal.classList.add('hidden');
+                appContainer.style.display = 'block';
 
                 if (unsubscribeTasks) {
                     unsubscribeTasks();
@@ -505,33 +680,33 @@
                     console.error("Error fetching schedule:", error);
                     showMessage("Failed to load your schedule from the database.");
                 });
+                
+                // Fetch username if it exists
+                const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/profile`);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    usernameInput.value = userDoc.data().username || '';
+                }
 
             } else {
-                try {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch (error) {
-                    console.error("Firebase auth error:", error);
-                    userId = null;
-                    authButton.textContent = 'Log In / Sign Up';
-                    userInfo.textContent = 'Not signed in';
-                    authButton.onclick = () => showAuthModal('login');
-                    document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
-                    tasksCache = {};
-                    currentScheduleData = [];
-                    renderSchedule();
-                    updateCounts();
-                    if (unsubscribeTasks) {
-                        unsubscribeTasks();
-                        unsubscribeTasks = null;
-                    }
-                    if (unsubscribeSchedule) {
-                        unsubscribeSchedule();
-                        unsubscribeSchedule = null;
-                    }
+                userId = null;
+                authButton.textContent = 'Log In / Sign Up';
+                userInfo.textContent = 'Not signed in';
+                authButton.onclick = () => showAuthModal('login');
+                appContainer.style.display = 'none';
+
+                document.querySelectorAll('ul').forEach(ul => ul.innerHTML = '');
+                tasksCache = {};
+                currentScheduleData = [];
+                renderSchedule();
+                updateCounts();
+                if (unsubscribeTasks) {
+                    unsubscribeTasks();
+                    unsubscribeTasks = null;
+                }
+                if (unsubscribeSchedule) {
+                    unsubscribeSchedule();
+                    unsubscribeSchedule = null;
                 }
             }
         });
@@ -615,7 +790,7 @@
         const authModal = document.getElementById('auth-modal');
         const authTitle = document.getElementById('auth-title');
         const authForm = document.getElementById('auth-form');
-        const authEmailInput = document.getElementById('auth-email');
+        const authUsernameInput = document.getElementById('auth-username');
         const authPasswordInput = document.getElementById('auth-password');
         const authSubmitBtn = document.getElementById('auth-submit-btn');
         const authToggleBtn = document.getElementById('auth-toggle-btn');
@@ -638,25 +813,28 @@
 
         authForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = authEmailInput.value;
+            const username = authUsernameInput.value;
             const password = authPasswordInput.value;
+            const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@homewrok-hub.com`;
             authErrorMsg.textContent = '';
 
             try {
                 if (isLogin) {
                     await signInWithEmailAndPassword(auth, email, password);
                 } else {
-                    await createUserWithEmailAndPassword(auth, email, password);
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    const userDocRef = doc(db, `artifacts/${appId}/users/${userCredential.user.uid}/userData/profile`);
+                    await setDoc(userDocRef, { username: username });
                 }
                 authModal.classList.add('hidden');
             } catch (error) {
                 let message = "An error occurred. Please try again.";
                 switch (error.code) {
-                    case "auth/invalid-email": message = "Invalid email address."; break;
+                    case "auth/invalid-email": message = "Invalid username format."; break;
                     case "auth/user-disabled": message = "This user account has been disabled."; break;
-                    case "auth/user-not-found": message = "No account found with this email."; break;
+                    case "auth/user-not-found": message = "No account found with this username."; break;
                     case "auth/wrong-password": message = "Incorrect password."; break;
-                    case "auth/email-already-in-use": message = "This email is already in use."; break;
+                    case "auth/email-already-in-use": message = "This username is already in use."; break;
                     case "auth/weak-password": message = "Password should be at least 6 characters."; break;
                     default: console.error("Authentication error:", error);
                 }
@@ -713,6 +891,45 @@
                 msg.textContent = `Schedule delayed by ${Math.floor(totalBreakMs / 60000)} minutes. Click "Create My Schedule" to apply the change.`;
             }
         }
+        
+        // Settings Modal and Theming
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
+        });
+
+        document.getElementById('close-settings-btn').addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+
+        document.getElementById('theme-dark').addEventListener('click', () => {
+            document.body.className = 'dark-theme';
+        });
+        document.getElementById('theme-light').addEventListener('click', () => {
+            document.body.className = 'light-theme';
+        });
+        document.getElementById('theme-ocean').addEventListener('click', () => {
+            document.body.className = 'ocean-theme';
+        });
+
+        document.getElementById('save-username-btn').addEventListener('click', async () => {
+            if (!userId) {
+                showMessage("Please log in to change your username.");
+                return;
+            }
+            const newUsername = usernameInput.value.trim();
+            if (newUsername) {
+                try {
+                    const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/profile`);
+                    await setDoc(userDocRef, { username: newUsername }, { merge: true });
+                    showMessage("Username updated successfully!");
+                    settingsModal.classList.add('hidden');
+                } catch (error) {
+                    console.error("Error updating username:", error);
+                    showMessage("Failed to save username.");
+                }
+            }
+        });
+
 
         document.getElementById('prev-week').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderAll(); };
         document.getElementById('next-week').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderAll(); };
