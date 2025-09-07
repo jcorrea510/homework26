@@ -398,6 +398,48 @@
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
+
+            onAuthStateChanged(auth, async (user) => {
+                const authButton = document.getElementById('auth-button');
+                const userInfoSpan = document.getElementById('user-info');
+                
+                if (user) {
+                    userId = user.uid;
+                    authButton.textContent = 'Sign Out';
+                    authButton.onclick = async () => {
+                        await signOut(auth);
+                        userId = null;
+                        tasksCache = {};
+                        currentScheduleData = [];
+                        if (unsubscribeTasks) unsubscribeTasks();
+                        if (unsubscribeSchedule) unsubscribeSchedule();
+                        if (unsubscribeSubjects) unsubscribeSubjects();
+                        renderAll();
+                    };
+
+                    const userProfileDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/profile`);
+                    const userProfile = await getDoc(userProfileDocRef);
+                    if (userProfile.exists()) {
+                         userInfoSpan.textContent = `Welcome, ${userProfile.data().username}!`;
+                    } else {
+                         userInfoSpan.textContent = `User ID: ${userId.slice(0, 6)}...`;
+                    }
+
+                    // --- Start of Fix ---
+                    fetchAndRenderSubjects();
+                    fetchAndRenderTasks();
+                    fetchAndRenderSchedule();
+                    // --- End of Fix ---
+                } else {
+                    userId = null;
+                    authButton.textContent = 'Log In';
+                    authButton.onclick = () => showAuthModal('login');
+                    userInfoSpan.textContent = '';
+                    tasksCache = {};
+                    currentScheduleData = [];
+                    renderAll();
+                }
+            });
         } catch (e) {
             console.error("Firebase initialization failed:", e);
             showMessage("Failed to connect to the database. Your data will not be saved.");
@@ -513,6 +555,7 @@
             renderTonightList();
             updateCounts();
             renderSubjectsInSettings();
+            renderSchedule();
         }
 
         function renderWeek() {
@@ -693,22 +736,52 @@
             }
         }
         
-        // New functions for managing subjects
         async function fetchAndRenderSubjects() {
             if (!userId || !db) return;
 
             const subjectsDocRef = doc(db, `artifacts/${appId}/users/${userId}/userData/subjects`);
+            if (unsubscribeSubjects) unsubscribeSubjects();
             unsubscribeSubjects = onSnapshot(subjectsDocRef, async (docSnapshot) => {
                 if (docSnapshot.exists()) {
                     subjects = docSnapshot.data().list || {};
                 } else {
-                    // Initialize with default subjects
                     await setDoc(subjectsDocRef, { list: DEFAULT_SUBJECTS });
                     subjects = DEFAULT_SUBJECTS;
                 }
                 renderAll();
             }, (error) => {
                 console.error("Error fetching subjects:", error);
+            });
+        }
+
+        async function fetchAndRenderTasks() {
+            if (!userId || !db) return;
+            const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+            if (unsubscribeTasks) unsubscribeTasks();
+            unsubscribeTasks = onSnapshot(tasksRef, (querySnapshot) => {
+                tasksCache = {};
+                querySnapshot.forEach(doc => {
+                    tasksCache[doc.id] = doc.data();
+                });
+                renderAll();
+            }, (error) => {
+                console.error("Error fetching tasks:", error);
+            });
+        }
+
+        async function fetchAndRenderSchedule() {
+            if (!userId || !db) return;
+            const scheduleDocRef = doc(db, `artifacts/${appId}/users/${userId}/data/schedule`);
+            if (unsubscribeSchedule) unsubscribeSchedule();
+            unsubscribeSchedule = onSnapshot(scheduleDocRef, (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    currentScheduleData = docSnapshot.data().tasks || [];
+                } else {
+                    currentScheduleData = [];
+                }
+                renderAll();
+            }, (error) => {
+                console.error("Error fetching schedule:", error);
             });
         }
         
@@ -1037,8 +1110,6 @@
         };
         document.getElementById('generate-schedule').onclick = createAndSaveSchedule;
         document.getElementById('break-btn').onclick = toggleBreak;
-
-        renderWeek();
     </script>
 </body>
 </html>
