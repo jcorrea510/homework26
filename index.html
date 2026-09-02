@@ -135,6 +135,7 @@
     <div class="flex items-center justify-between gap-3 mb-4">
       <h2 class="text-xl font-bold">Week planner</h2>
       <div class="flex items-center gap-2">
+        <button id="edit-courses" class="px-3 py-2 rounded-lg text-xs font-medium mr-1" style="background:var(--panel-2);border:1px solid var(--line)">Edit courses</button>
         <button id="prev-week" aria-label="Previous week" class="px-3 py-2 rounded-lg" style="background:var(--panel-2);border:1px solid var(--line)">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
@@ -145,7 +146,7 @@
       </div>
     </div>
     <p id="week-label" class="text-sm mb-4" style="color:var(--muted)"></p>
-    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"></div>
+    <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 items-start"></div>
   </section>
 
 </div>
@@ -157,6 +158,22 @@
     <div class="flex gap-2 justify-end">
       <button id="modal-cancel-btn" class="hidden px-4 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Cancel</button>
       <button id="modal-close-btn" class="px-5 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent)">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Courses modal -->
+<div id="courses-modal" class="hidden modal-overlay">
+  <div class="modal-content">
+    <h2 class="text-xl font-bold mb-1">Courses</h2>
+    <p class="text-xs mb-4" style="color:var(--muted)">These are the subjects that show up on every day of the planner.</p>
+    <div id="courses-rows" class="space-y-2 mb-3 max-h-72 overflow-y-auto pr-1"></div>
+    <button id="courses-add" class="text-sm hover:underline" style="color:var(--accent)">Add a course</button>
+    <p id="courses-note" class="text-xs mt-4" style="color:var(--muted)">Renaming a course moves its assignments with it. Removing one keeps its assignments under Other.</p>
+    <p id="courses-error" class="text-sm mt-2" style="color:#f87171"></p>
+    <div class="flex gap-2 justify-end mt-5">
+      <button id="courses-cancel" class="px-4 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Cancel</button>
+      <button id="courses-save" class="px-5 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent)">Save courses</button>
     </div>
   </div>
 </div>
@@ -189,6 +206,10 @@ import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatc
 
 const CLASSES = ["English", "Physics", "Math", "Spanish", "Comp Sci", "Gov", "POE"];
 
+// The list actually shown in the planner. Loaded per account; falls back to
+// CLASSES until settings arrive.
+let classList = [...CLASSES];
+
 const SUBJECT_COLORS = {
   "English":  "#f0a742",
   "Physics":  "#3ecf8e",
@@ -199,8 +220,18 @@ const SUBJECT_COLORS = {
   "POE":      "#7ed0c4",
   "Custom":   "#c084fc"
 };
-const FALLBACK_COLOR = "#8b95ab";
-const colorFor = (cls) => SUBJECT_COLORS[cls] || FALLBACK_COLOR;
+// Courses added or renamed by the user get a stable colour picked from here.
+const PALETTE = ["#f0a742", "#3ecf8e", "#f2708a", "#a78bfa", "#5b8def", "#e0736a",
+                 "#7ed0c4", "#c084fc", "#6ee7b7", "#fbbf24", "#60a5fa", "#fb7185"];
+
+function colorFor(cls) {
+  const name = String(cls || '');
+  if (SUBJECT_COLORS[name]) return SUBJECT_COLORS[name];
+  if (!name.trim()) return "#8b95ab";
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
 
 const DEFAULT_MINUTES = 30;
 
@@ -223,7 +254,7 @@ let userId = null;
 let tasksCache = {};
 let scheduleMeta = { startAt: null, shiftMs: 0, breakStartedAt: null, completions: {} };
 let weekStart = getStartOfWeek(new Date());
-let unsubscribeTasks = null, unsubscribeSchedule = null;
+let unsubscribeTasks = null, unsubscribeSchedule = null, unsubscribeSettings = null;
 let sortableTonight = null;
 let tonightSignature = null;
 const calendarLists = new Map();   // "dateString|Class" -> <ul>
@@ -779,7 +810,6 @@ function buildCalendar() {
 
     const card = document.createElement('div');
     card.className = 'panel p-4 flex flex-col';
-    if (isToday) card.style.borderColor = 'var(--accent)';
 
     const head = document.createElement('div');
     head.className = 'mb-3';
@@ -791,10 +821,9 @@ function buildCalendar() {
     card.appendChild(head);
 
     const scroller = document.createElement('div');
-    scroller.className = 'flex-1 space-y-3 overflow-y-auto pr-1';
-    scroller.style.maxHeight = '460px';
+    scroller.className = 'flex-1 space-y-3';
 
-    CLASSES.forEach(cls => {
+    classList.forEach(cls => {
       const section = document.createElement('div');
 
       const label = document.createElement('div');
@@ -879,9 +908,7 @@ function calendarRow(t) {
     updateTaskInDb(t.id, { isTonight: !t.isTonight, orderIndex: t.isTonight ? (t.orderIndex || 0) : Date.now() });
   });
   li.querySelector('.done-btn').addEventListener('click', () => setTaskDone(t.id, !t.done));
-  li.querySelector('.delete-btn').addEventListener('click', () => {
-    confirmAction(`Delete "${t.name}"?`, 'Delete', () => deleteTaskFromDb(t.id));
-  });
+  li.querySelector('.delete-btn').addEventListener('click', () => deleteTaskFromDb(t.id));
   return li;
 }
 
@@ -904,6 +931,109 @@ function paintCalendar() {
     section.classList.toggle('hidden', !used.has(key));
   });
 }
+
+/* ------------------------------------------------------------------ *
+ * Course editor
+ * ------------------------------------------------------------------ */
+
+let courseDraft = [];
+
+function openCourseEditor() {
+  if (!requireLogin('edit your courses')) return;
+  courseDraft = classList.map(name => ({ name, original: name }));
+  $('courses-error').textContent = '';
+  renderCourseRows();
+  $('courses-modal').classList.remove('hidden');
+}
+
+function renderCourseRows(focusLast = false) {
+  const wrap = $('courses-rows');
+  wrap.innerHTML = '';
+
+  courseDraft.forEach((course, i) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    row.innerHTML = `
+      <span class="shrink-0 w-2.5 h-2.5 rounded-full js-dot" style="background:${colorFor(course.name)}"></span>
+      <input class="field flex-1 min-w-0 px-2 py-1.5 text-sm js-name" placeholder="Course name" value="${escapeHtml(course.name)}">
+      <button class="js-up shrink-0 w-7 h-7 rounded text-xs disabled:opacity-25" title="Move up"
+              style="background:var(--panel-2);border:1px solid var(--line)" ${i === 0 ? 'disabled' : ''}>&#8593;</button>
+      <button class="js-down shrink-0 w-7 h-7 rounded text-xs disabled:opacity-25" title="Move down"
+              style="background:var(--panel-2);border:1px solid var(--line)" ${i === courseDraft.length - 1 ? 'disabled' : ''}>&#8595;</button>
+      <button class="js-del shrink-0 w-7 h-7 rounded text-lg leading-none" title="Remove course" style="color:var(--muted)">&times;</button>
+    `;
+
+    const input = row.querySelector('.js-name');
+    const dot = row.querySelector('.js-dot');
+    input.addEventListener('input', (e) => {
+      course.name = e.target.value;
+      dot.style.background = colorFor(course.name);
+    });
+    row.querySelector('.js-up').addEventListener('click', () => {
+      [courseDraft[i - 1], courseDraft[i]] = [courseDraft[i], courseDraft[i - 1]];
+      renderCourseRows();
+    });
+    row.querySelector('.js-down').addEventListener('click', () => {
+      [courseDraft[i + 1], courseDraft[i]] = [courseDraft[i], courseDraft[i + 1]];
+      renderCourseRows();
+    });
+    row.querySelector('.js-del').addEventListener('click', () => {
+      courseDraft.splice(i, 1);
+      renderCourseRows();
+    });
+
+    wrap.appendChild(row);
+  });
+
+  if (focusLast) {
+    const inputs = wrap.querySelectorAll('.js-name');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }
+}
+
+async function saveCourses() {
+  const names = courseDraft.map(c => c.name.trim()).filter(Boolean);
+  const err = $('courses-error');
+
+  if (!names.length) { err.textContent = 'Keep at least one course.'; return; }
+  const lower = names.map(n => n.toLowerCase());
+  if (new Set(lower).size !== lower.length) { err.textContent = 'Two courses have the same name.'; return; }
+  if (!requireLogin('edit your courses')) return;
+
+  const renames = courseDraft
+    .filter(c => c.original && c.name.trim() && c.name.trim() !== c.original)
+    .map(c => ({ from: c.original, to: c.name.trim() }));
+
+  $('courses-modal').classList.add('hidden');
+  classList = names;          // optimistic, so the planner updates immediately
+  buildCalendar();
+
+  try {
+    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/settings`), { classes: names });
+
+    if (renames.length) {
+      const batch = writeBatch(db);
+      const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
+      let moved = 0;
+      Object.values(tasksCache).forEach(t => {
+        const hit = renames.find(r => r.from === t.cls);
+        if (hit) { batch.set(doc(tasksRef, t.id), { cls: hit.to }, { merge: true }); moved++; }
+      });
+      if (moved) await batch.commit();
+    }
+  } catch (e) {
+    console.error("Error saving courses:", e);
+    showMessage("Couldn't save your courses. Check your connection and try again.");
+  }
+}
+
+$('edit-courses').onclick = openCourseEditor;
+$('courses-cancel').onclick = () => $('courses-modal').classList.add('hidden');
+$('courses-save').onclick = saveCourses;
+$('courses-add').onclick = () => {
+  courseDraft.push({ name: '', original: null });
+  renderCourseRows(true);
+};
 
 /* ------------------------------------------------------------------ *
  * Auth
@@ -955,6 +1085,16 @@ $('auth-form').addEventListener('submit', async (e) => {
 function attachListeners() {
   if (unsubscribeTasks) { unsubscribeTasks(); unsubscribeTasks = null; }
   if (unsubscribeSchedule) { unsubscribeSchedule(); unsubscribeSchedule = null; }
+  if (unsubscribeSettings) { unsubscribeSettings(); unsubscribeSettings = null; }
+
+  const settingsRef = doc(db, `artifacts/${appId}/users/${userId}/data/settings`);
+  unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
+    const saved = snap.exists() ? snap.data().classes : null;
+    classList = (Array.isArray(saved) && saved.length) ? saved.slice() : [...CLASSES];
+    buildCalendar();
+  }, (error) => {
+    console.error("Error fetching courses:", error);
+  });
 
   const tasksRef = collection(db, `artifacts/${appId}/users/${userId}/tasks`);
   unsubscribeTasks = onSnapshot(tasksRef, (snap) => {
@@ -1002,6 +1142,9 @@ if (auth) {
       authButton.onclick = () => showAuthModal('login');
       if (unsubscribeTasks) { unsubscribeTasks(); unsubscribeTasks = null; }
       if (unsubscribeSchedule) { unsubscribeSchedule(); unsubscribeSchedule = null; }
+      if (unsubscribeSettings) { unsubscribeSettings(); unsubscribeSettings = null; }
+      classList = [...CLASSES];
+      buildCalendar();
       tasksCache = {};
       scheduleMeta = { startAt: null, shiftMs: 0, breakStartedAt: null, completions: {} };
       tonightSignature = null;
