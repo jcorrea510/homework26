@@ -64,7 +64,16 @@
     --warn: #b05c17; --danger: #b23b2c; --edge: #c2b7a1;
     --on-accent: #fffdf8; --on-good: #fffdf8;
   }
-  body { transition: background-color .25s ease, color .25s ease; }
+  body { transition: background-color .25s ease, color .25s ease, padding-right .26s ease; }
+  :root { --drawer-w: 380px; }
+
+  /* Pinned: the page gives up the space instead of being covered. */
+  body.pinned { padding-right: var(--drawer-w); }
+  body.pinned #history-drawer { transform: none; box-shadow: none; }
+  body.pinned #history-scrim, body.pinned #history-tab { display: none; }
+  body.pinned #toast-wrap { right: calc(var(--drawer-w) + 1rem); }
+  body.pinned #focus-overlay { right: var(--drawer-w); }
+  body.compact.pinned { padding-right: 0; }
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background: var(--bg);
@@ -135,7 +144,7 @@
   }
   #history-scrim { position: fixed; inset: 0; background: rgba(4,6,12,.55); z-index: 1140; }
   #history-drawer {
-    position: fixed; top: 0; right: 0; height: 100%; width: 380px; max-width: 90vw;
+    position: fixed; top: 0; right: 0; height: 100%; width: var(--drawer-w); max-width: 90vw;
     background: var(--panel); border-left: 1px solid var(--line); z-index: 1150;
     transform: translateX(100%); transition: transform .26s ease;
     display: flex; flex-direction: column;
@@ -172,6 +181,12 @@
     padding: 2rem; text-align: center; animation: toast-in .25s ease;
   }
   #focus-overlay.hidden { display: none; }
+  #focus-music-slot #mini-player {
+    position: static; width: 100%; max-width: none; box-shadow: none; animation: none;
+  }
+  .seg { flex: 1; padding: .45rem 0; font-size: .75rem; font-weight: 600; border-radius: 8px;
+         color: var(--muted); background: transparent; }
+  .seg.active { background: var(--panel); color: var(--text); }
   #focus-clock { font-size: clamp(4rem, 22vw, 9rem); font-weight: 800; line-height: 1; letter-spacing: -.04em; }
 
   /* Mini player */
@@ -374,7 +389,11 @@
           <button id="music-save" class="px-3 py-1.5 rounded-lg text-xs font-semibold" style="background:var(--accent);color:var(--on-accent)">Load</button>
         </div>
         <p id="music-error" class="text-xs mt-2" style="color:var(--danger)"></p>
-        <button id="music-popout" class="hidden w-full mt-3 px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Show player controls</button>
+        <div class="flex gap-2 mt-3">
+          <button id="music-popout" class="hidden flex-1 px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Show player controls</button>
+          <button id="music-pin" class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Pin sidebar open</button>
+        </div>
+        <p id="pin-hint" class="text-xs mt-2" style="color:var(--muted)"></p>
         <div id="music-frame" class="mt-3"></div>
       </div>
       <div style="border-top:1px solid var(--line)" class="pt-4">
@@ -441,6 +460,43 @@
         </button>
       </div>
 
+      <div style="border-top:1px solid var(--line)" class="pt-4 space-y-3">
+        <h3 class="text-sm font-semibold">Focus mode</h3>
+
+        <div>
+          <div class="text-sm font-semibold mb-1">Schedule</div>
+          <div class="flex gap-1 p-1 rounded-lg" style="background:var(--panel-2)">
+            <button class="seg" data-focussched="none">Hide</button>
+            <button class="seg" data-focussched="next">Next only</button>
+            <button class="seg" data-focussched="all">Full list</button>
+          </div>
+        </div>
+
+        <button id="set-focusmusic" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Music controls</span>
+            <span class="text-xs" style="color:var(--muted)">Play, skip and scrub without leaving focus.</span>
+          </span>
+          <span class="switch" id="sw-focusmusic"></span>
+        </button>
+
+        <button id="set-focusworked" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Time worked today</span>
+            <span class="text-xs" style="color:var(--muted)">Finished tasks plus the one you're on.</span>
+          </span>
+          <span class="switch" id="sw-focusworked"></span>
+        </button>
+
+        <button id="set-focusclock" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Clock</span>
+            <span class="text-xs" style="color:var(--muted)">The actual time, next to your countdown.</span>
+          </span>
+          <span class="switch" id="sw-focusclock"></span>
+        </button>
+      </div>
+
       <div style="border-top:1px solid var(--line)" class="pt-4">
         <h3 class="text-sm font-semibold mb-2">Courses</h3>
         <button id="settings-courses" class="w-full px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Edit courses</button>
@@ -468,7 +524,12 @@
     <button id="focus-plus" class="px-4 py-3 rounded-xl font-medium" style="background:var(--panel-2);border:1px solid var(--line)">+5</button>
     <button id="focus-break" class="px-4 py-3 rounded-xl font-medium" style="background:var(--panel-2);border:1px solid var(--line)">Break</button>
   </div>
-  <button id="focus-exit" class="mt-10 text-sm hover:underline" style="color:var(--muted)">Leave focus mode</button>
+  <div id="focus-extras" class="w-full mt-8" style="max-width:520px">
+    <div id="focus-stats" class="flex justify-center gap-6 text-sm mb-5"></div>
+    <div id="focus-upnext" class="text-left space-y-1"></div>
+    <div id="focus-music-slot" class="mt-5"></div>
+  </div>
+  <button id="focus-exit" class="mt-8 text-sm hover:underline" style="color:var(--muted)">Leave focus mode</button>
 </div>
 
 <!-- Courses modal -->
@@ -632,7 +693,12 @@ const DEFAULT_SETTINGS = {
   autoAdd: true,
   showDurations: false,
   musicUrl: '',
-  courseColors: {}
+  courseColors: {},
+  pinned: false,
+  focusSchedule: 'next',   // 'none' | 'next' | 'all'
+  focusMusic: true,
+  focusWorked: true,
+  focusClock: false
 };
 let settings = { ...DEFAULT_SETTINGS };
 let themeIsLight = false;
@@ -1035,8 +1101,39 @@ function openHistory(tab) {
   $('history-scrim').classList.remove('hidden');
 }
 function closeHistory() {
+  if (settings.pinned) setPinned(false);
   $('history-drawer').classList.remove('open');
   $('history-scrim').classList.add('hidden');
+}
+
+function setPinned(on) {
+  const pinned = on && !mobileMode;
+  document.body.classList.toggle('pinned', pinned);
+  if (pinned) {
+    $('history-drawer').classList.add('open');
+    $('history-scrim').classList.add('hidden');
+  }
+  if (settings.pinned !== pinned) saveSettings({ pinned });
+  else settings.pinned = pinned;
+  syncPinButton();
+}
+
+function syncPinButton() {
+  const btn = $('music-pin');
+  const hint = $('pin-hint');
+  if (mobileMode) {
+    btn.disabled = true;
+    btn.style.opacity = '.4';
+    btn.textContent = 'Pin sidebar open';
+    hint.textContent = 'Pinning needs a wider screen \u2014 there isn\'t room beside the sidebar on a phone.';
+    return;
+  }
+  btn.disabled = false;
+  btn.style.opacity = '1';
+  btn.textContent = settings.pinned ? 'Unpin sidebar' : 'Pin sidebar open';
+  hint.textContent = settings.pinned
+    ? 'The page sits beside the sidebar, so your video and your schedule are both on screen.'
+    : '';
 }
 
 /* ------------------------------------------------------------------ *
@@ -1132,14 +1229,22 @@ function renderSettingsPanel() {
 
   $('deflen-value').textContent = `${settings.defaultMinutes} min`;
   [['sw-smart', 'smartDurations'], ['sw-chime', 'chime'],
-   ['sw-autoadd', 'autoAdd'], ['sw-durations', 'showDurations']]
+   ['sw-autoadd', 'autoAdd'], ['sw-durations', 'showDurations'],
+   ['sw-focusmusic', 'focusMusic'], ['sw-focusworked', 'focusWorked'],
+   ['sw-focusclock', 'focusClock']]
     .forEach(([id, key]) => $(id).classList.toggle('on', !!settings[key]));
+
+  document.querySelectorAll('[data-focussched]').forEach(b =>
+    b.classList.toggle('active', b.dataset.focussched === settings.focusSchedule));
+  syncPinButton();
 }
 
 function toggleSetting(key) {
   saveSettings({ [key]: !settings[key] });
   renderSettingsPanel();
   if (key === 'showDurations') { syncDurationToggle(); buildCalendar(); }
+  if (key === 'focusMusic') syncFocusMusicSlot();
+  if (focusOn) renderSchedule();
 }
 
 function syncDurationToggle() {
@@ -1332,10 +1437,12 @@ function mediaStatus() {
 function updateMiniPlayer() {
   const bar = $('mini-player');
   const status = mediaStatus();
-  const show = status.ok && mediaEverPlayed && !miniDismissed;
+  const inFocus = focusOn && settings.focusMusic;
+  const show = status.ok && (inFocus || (mediaEverPlayed && !miniDismissed));
 
   bar.classList.toggle('hidden', !show);
-  document.body.classList.toggle('has-mini', show);
+  $('mini-close').classList.toggle('hidden', inFocus);
+  document.body.classList.toggle('has-mini', show && !inFocus);
   if (!show) return;
 
   $('mini-play').innerHTML = status.playing ? ICON_PAUSE : ICON_PLAY;
@@ -1918,16 +2025,71 @@ let focusOn = false;
 function enterFocus() {
   focusOn = true;
   $('focus-overlay').classList.remove('hidden');
+  syncFocusMusicSlot();
   renderSchedule();
 }
+
 function exitFocus() {
   focusOn = false;
   $('focus-overlay').classList.add('hidden');
+  syncFocusMusicSlot();
+  updateMiniPlayer();
+}
+
+/**
+ * The bar is one element that gets moved, not two copies. The player iframe
+ * itself is never reparented — browsers reload an iframe when you move it,
+ * which would restart whatever is playing.
+ */
+function syncFocusMusicSlot() {
+  const bar = $('mini-player');
+  const slot = $('focus-music-slot');
+  const wantsInFocus = focusOn && settings.focusMusic;
+  if (wantsInFocus && bar.parentElement !== slot) slot.appendChild(bar);
+  else if (!wantsInFocus && bar.parentElement === slot) document.body.insertBefore(bar, $('toast-wrap'));
+  updateMiniPlayer();
+}
+
+function workedTodayMs(info, now) {
+  const day = historyCache[ymd(new Date())];
+  let ms = day ? Object.values(day.entries || {}).reduce((a, e) => a + (e.actualMs || 0), 0) : 0;
+  if (info.active && now > info.active.start) ms += now - info.active.start;
+  return ms;
+}
+
+function paintFocusExtras(info, now) {
+  const stats = [];
+  if (settings.focusWorked) stats.push(['Worked today', fmtMinutes(Math.round(workedTodayMs(info, now) / 60000))]);
+  if (settings.focusClock) stats.push(['Time', fmtClock(now)]);
+  $('focus-stats').innerHTML = stats.map(([label, value]) =>
+    `<span><span style="color:var(--muted)">${label}</span> <span class="font-semibold countdown">${value}</span></span>`).join('');
+  $('focus-stats').style.display = stats.length ? 'flex' : 'none';
+
+  const upnext = $('focus-upnext');
+  const rest = info.rows.filter(r => r.state === 'upcoming');
+  if (settings.focusSchedule === 'none' || !rest.length) {
+    upnext.innerHTML = '';
+    upnext.style.display = 'none';
+  } else {
+    upnext.style.display = 'block';
+    const shown = settings.focusSchedule === 'next' ? rest.slice(0, 1) : rest;
+    upnext.innerHTML =
+      `<div class="text-xs mb-1" style="color:var(--muted)">${settings.focusSchedule === 'next' ? 'Up next' : `Still to go \u00b7 ${rest.length}`}</div>` +
+      shown.map(r => `
+        <div class="flex items-baseline justify-between gap-3 text-sm px-3 py-1.5 rounded-lg" style="background:var(--panel)">
+          <span class="min-w-0 truncate">
+            <span class="font-semibold" style="color:${colorFor(r.task.cls)}">${escapeHtml(r.task.cls)}</span>
+            <span class="ml-1.5">${escapeHtml(r.task.name)}</span>
+          </span>
+          <span class="text-xs shrink-0 countdown" style="color:var(--muted)">${fmtClock(r.start)}</span>
+        </div>`).join('');
+  }
 }
 
 function paintFocus(info, now) {
   if (!focusOn) return;
   if (!info.started) { exitFocus(); return; }
+  paintFocusExtras(info, now);
 
   const row = info.active;
   if (!row) {
@@ -2506,7 +2668,9 @@ function attachListeners() {
       if (settingsCache[k] !== undefined && settingsCache[k] !== null) settings[k] = settingsCache[k];
     });
     syncDurationToggle();
+    syncPinButton();
     if (settings.theme !== before) applyTheme(settings.theme);
+    if (settings.pinned && !mobileMode) { openHistory('music'); setPinned(true); }
     classList = (Array.isArray(saved) && saved.length) ? saved.slice() : [...CLASSES];
     settingsLoaded = true;
     buildCalendar();
@@ -2743,7 +2907,20 @@ $('set-smart').onclick = () => toggleSetting('smartDurations');
 $('set-chime').onclick = () => { toggleSetting('chime'); if (settings.chime) playChime(); };
 $('set-autoadd').onclick = () => toggleSetting('autoAdd');
 $('set-durations').onclick = () => toggleSetting('showDurations');
-$('settings-courses').onclick = () => { closeHistory(); openCourseEditor(); };
+$('set-focusmusic').onclick = () => toggleSetting('focusMusic');
+$('set-focusworked').onclick = () => toggleSetting('focusWorked');
+$('set-focusclock').onclick = () => toggleSetting('focusClock');
+document.querySelectorAll('[data-focussched]').forEach(btn => {
+  btn.onclick = () => {
+    saveSettings({ focusSchedule: btn.dataset.focussched });
+    renderSettingsPanel();
+    if (focusOn) renderSchedule();
+  };
+});
+
+$('music-pin').onclick = () => setPinned(!settings.pinned);
+
+$('settings-courses').onclick = () => { if (!settings.pinned) closeHistory(); openCourseEditor(); };
 
 $('deflen-down').onclick = () => { saveSettings({ defaultMinutes: stepMinutes(settings.defaultMinutes, -1) }); renderSettingsPanel(); };
 $('deflen-up').onclick = () => { saveSettings({ defaultMinutes: stepMinutes(settings.defaultMinutes, 1) }); renderSettingsPanel(); };
@@ -2766,7 +2943,7 @@ $('music-popout').onclick = () => {
   miniDismissed = false;
   mediaEverPlayed = true;   // the button is an explicit request to see the bar
   updateMiniPlayer();
-  closeHistory();
+  if (!settings.pinned) closeHistory();
 };
 
 // The bar polls, because neither player pushes a position update every second.
@@ -2826,6 +3003,8 @@ window.addEventListener('resize', () => {
     if (narrow === mobileMode) return;
     mobileMode = narrow;
     document.body.classList.toggle('compact', narrow);
+    if (narrow && settings.pinned) setPinned(false);
+    syncPinButton();
     buildCalendar();
   }, 150);
 });
@@ -2842,6 +3021,7 @@ settings.theme = bootTheme;
 installAppBits();
 $('install-hint').textContent = "Your browser's menu has an Add to home screen option if no button appears here.";
 syncDurationToggle();
+syncPinButton();
 
 buildCalendar();
 renderTonight();
