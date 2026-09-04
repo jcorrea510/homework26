@@ -4,11 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Homework Hub</title>
+<meta name="theme-color" content="#5b8def" id="meta-theme-color">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Homework">
+<meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root {
+  :root, body.theme-midnight, .theme-midnight {
+    color-scheme: dark;
     --bg: #0a0d14;
     --panel: #131824;
     --panel-2: #1b2130;
@@ -18,8 +24,47 @@
     --accent: #5b8def;
     --good: #3ecf8e;
     --warn: #f0a742;
+    --danger: #e04a4a;
+    --edge: #4a5468;      /* unchecked circles and boxes */
+    --on-accent: #ffffff; /* text on accent / good fills */
+    --on-good: #08130d;
   }
-  html { color-scheme: dark; }
+  body.theme-ocean, .theme-ocean {
+    color-scheme: dark;
+    --bg: #071316; --panel: #0f2126; --panel-2: #163037; --line: #22434c;
+    --text: #e2f1f2; --muted: #82a0a6; --accent: #2fb3c9; --good: #4ad4a4;
+    --warn: #efa94a; --danger: #e0655a; --edge: #3d626b;
+    --on-accent: #04191d; --on-good: #04191d;
+  }
+  body.theme-forest, .theme-forest {
+    color-scheme: dark;
+    --bg: #0a1310; --panel: #12211b; --panel-2: #1b3028; --line: #264337;
+    --text: #e6f2ea; --muted: #86a496; --accent: #5cc98a; --good: #8fd94f;
+    --warn: #e8b04c; --danger: #d9614f; --edge: #3c6151;
+    --on-accent: #06170f; --on-good: #06170f;
+  }
+  body.theme-plum, .theme-plum {
+    color-scheme: dark;
+    --bg: #120c18; --panel: #1d1526; --panel-2: #2a1f37; --line: #3a2b4b;
+    --text: #f0e9f6; --muted: #a294b0; --accent: #b07be0; --good: #52cf9a;
+    --warn: #edaa55; --danger: #e05f7a; --edge: #5b4670;
+    --on-accent: #17091f; --on-good: #07160f;
+  }
+  body.theme-daylight, .theme-daylight {
+    color-scheme: light;
+    --bg: #f4f6fb; --panel: #ffffff; --panel-2: #eef1f8; --line: #dde2ee;
+    --text: #161c28; --muted: #64708a; --accent: #2f5fd0; --good: #158a5c;
+    --warn: #b96a06; --danger: #c8362f; --edge: #b6bfd2;
+    --on-accent: #ffffff; --on-good: #ffffff;
+  }
+  body.theme-paper, .theme-paper {
+    color-scheme: light;
+    --bg: #f5f1e8; --panel: #fffdf8; --panel-2: #efe9db; --line: #ddd4c2;
+    --text: #2a2419; --muted: #7a705d; --accent: #a06a2c; --good: #4a7c2f;
+    --warn: #b05c17; --danger: #b23b2c; --edge: #c2b7a1;
+    --on-accent: #fffdf8; --on-good: #fffdf8;
+  }
+  body { transition: background-color .25s ease, color .25s ease; }
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background: var(--bg);
@@ -92,6 +137,40 @@
   #history-body summary { list-style: none; }
   #history-body summary::-webkit-details-marker { display: none; }
 
+  /* Drawer tabs */
+  .drawer-tab {
+    flex: 1; padding: .55rem 0; font-size: .75rem; font-weight: 600;
+    border-radius: 9px; color: var(--muted); background: transparent;
+  }
+  .drawer-tab.active { background: var(--panel-2); color: var(--text); }
+
+  .swatch { width: 100%; height: 34px; border-radius: 9px; border: 2px solid var(--line); position: relative; }
+  .swatch.active { border-color: var(--accent); }
+
+  /* Toggle switch */
+  .switch { width: 38px; height: 22px; border-radius: 999px; background: var(--edge); position: relative; flex: none; }
+  .switch::after {
+    content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--on-accent); transition: transform .18s ease;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { transform: translateX(16px); }
+
+  /* Focus mode */
+  #focus-overlay {
+    position: fixed; inset: 0; z-index: 1300; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem; text-align: center; animation: toast-in .25s ease;
+  }
+  #focus-overlay.hidden { display: none; }
+  #focus-clock { font-size: clamp(4rem, 22vw, 9rem); font-weight: 800; line-height: 1; letter-spacing: -.04em; }
+
+  /* Music */
+  #music-frame iframe { width: 100%; border: 0; border-radius: 12px; }
+  .amb-btn { flex: 1; padding: .6rem 0; border-radius: 10px; font-size: .78rem; font-weight: 600;
+             background: var(--panel-2); border: 1px solid var(--line); }
+  .amb-btn.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
   /* Phone layout */
   body.compact .panel { padding: .85rem !important; border-radius: 14px; }
   body.compact h1 { font-size: 1.5rem; }
@@ -150,7 +229,10 @@
     <section class="panel p-5 sm:p-6 flex flex-col">
       <div class="flex items-baseline justify-between mb-4">
         <h2 class="text-xl font-bold">Schedule</h2>
-        <span id="finish-label" class="text-xs" style="color:var(--muted)"></span>
+        <div class="flex items-baseline gap-3">
+          <span id="finish-label" class="text-xs" style="color:var(--muted)"></span>
+          <button id="focus-enter" class="hidden text-xs font-semibold hover:underline" style="color:var(--accent)">Focus</button>
+        </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-2 mb-4">
@@ -178,6 +260,7 @@
     <div class="flex items-center justify-between gap-3 mb-4">
       <h2 class="text-xl font-bold">Week planner</h2>
       <div class="flex items-center gap-2">
+        <button id="toggle-durations" class="px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--panel-2);border:1px solid var(--line)">Show times</button>
         <button id="edit-courses" class="px-3 py-2 rounded-lg text-xs font-medium mr-1" style="background:var(--panel-2);border:1px solid var(--line)">Edit courses</button>
         <button id="prev-week" aria-label="Previous week" class="px-3 py-2 rounded-lg" style="background:var(--panel-2);border:1px solid var(--line)">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
@@ -207,19 +290,140 @@
 
 <div id="toast-wrap"></div>
 
-<!-- History drawer -->
-<button id="history-tab">History</button>
+<!-- Sidebar -->
+<button id="history-tab">Menu</button>
 <div id="history-scrim" class="hidden"></div>
-<aside id="history-drawer" aria-label="Work history">
-  <div class="flex items-baseline justify-between p-5 pb-3">
-    <div>
-      <h2 class="text-lg font-bold">History</h2>
-      <p id="history-total" class="text-xs mt-0.5" style="color:var(--muted)"></p>
-    </div>
+<aside id="history-drawer" aria-label="Menu">
+  <div class="flex items-center justify-between px-5 pt-5 pb-3">
+    <h2 id="drawer-title" class="text-lg font-bold">History</h2>
     <button id="history-close" class="text-2xl leading-none px-1" style="color:var(--muted)">&times;</button>
   </div>
-  <div id="history-body" class="flex-1 overflow-y-auto px-5 pb-6 space-y-2"></div>
+  <div class="flex gap-1 mx-5 mb-4 p-1 rounded-xl" style="background:var(--panel-2)">
+    <button class="drawer-tab active" data-tab="history">History</button>
+    <button class="drawer-tab" data-tab="upcoming">Upcoming</button>
+    <button class="drawer-tab" data-tab="music">Music</button>
+    <button class="drawer-tab" data-tab="settings">Settings</button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto px-5 pb-8">
+
+    <!-- History -->
+    <div data-panel="history">
+      <p id="history-total" class="text-xs mb-3" style="color:var(--muted)"></p>
+      <div id="history-body" class="space-y-2"></div>
+    </div>
+
+    <!-- Upcoming -->
+    <div data-panel="upcoming" class="hidden">
+      <p class="text-xs mb-3" style="color:var(--muted)">Everything unfinished that isn't already on tonight's list.</p>
+      <div id="upcoming-body" class="space-y-3"></div>
+    </div>
+
+    <!-- Music -->
+    <div data-panel="music" class="hidden space-y-5">
+      <div>
+        <h3 class="text-sm font-semibold mb-1">Your playlist</h3>
+        <p class="text-xs mb-2" style="color:var(--muted)">Paste a YouTube or Spotify link and it stays here.</p>
+        <div class="flex gap-2">
+          <input id="music-url" class="field flex-1 min-w-0 px-2 py-1.5 text-xs" placeholder="https://…">
+          <button id="music-save" class="px-3 py-1.5 rounded-lg text-xs font-semibold" style="background:var(--accent);color:var(--on-accent)">Load</button>
+        </div>
+        <p id="music-error" class="text-xs mt-2" style="color:var(--danger)"></p>
+        <div id="music-frame" class="mt-3"></div>
+      </div>
+      <div style="border-top:1px solid var(--line)" class="pt-4">
+        <h3 class="text-sm font-semibold mb-1">Focus sound</h3>
+        <p class="text-xs mb-2" style="color:var(--muted)">Generated live, so it never repeats and never ends. Ambient texture rather than real music.</p>
+        <div class="flex gap-2">
+          <button class="amb-btn" data-amb="keys">Calm keys</button>
+          <button class="amb-btn" data-amb="drift">Drift</button>
+          <button class="amb-btn" data-amb="off">Off</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div data-panel="settings" class="hidden space-y-5">
+      <div>
+        <h3 class="text-sm font-semibold mb-2">Theme</h3>
+        <div id="theme-grid" class="grid grid-cols-3 gap-2"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--line)" class="pt-4 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-semibold">Default task length</div>
+            <div class="text-xs" style="color:var(--muted)">Used when a course has no history yet.</div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button id="deflen-down" class="w-7 h-7 rounded-lg" style="background:var(--panel-2);border:1px solid var(--line)">&minus;</button>
+            <span id="deflen-value" class="w-12 text-center text-sm font-semibold countdown"></span>
+            <button id="deflen-up" class="w-7 h-7 rounded-lg" style="background:var(--panel-2);border:1px solid var(--line)">+</button>
+          </div>
+        </div>
+
+        <button id="set-smart" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Learn from my times</span>
+            <span class="text-xs" style="color:var(--muted)">New tasks use your median for that course.</span>
+          </span>
+          <span class="switch" id="sw-smart"></span>
+        </button>
+
+        <button id="set-chime" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Chime when time's up</span>
+            <span class="text-xs" style="color:var(--muted)">Two soft notes on the active task.</span>
+          </span>
+          <span class="switch" id="sw-chime"></span>
+        </button>
+
+        <button id="set-autoadd" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Auto-add tomorrow's work</span>
+            <span class="text-xs" style="color:var(--muted)">Off means the daily reset only clears finished tasks.</span>
+          </span>
+          <span class="switch" id="sw-autoadd"></span>
+        </button>
+
+        <button id="set-durations" class="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span class="text-sm font-semibold block">Show times in the planner</span>
+            <span class="text-xs" style="color:var(--muted)">Edit how long each assignment takes from the week grid.</span>
+          </span>
+          <span class="switch" id="sw-durations"></span>
+        </button>
+      </div>
+
+      <div style="border-top:1px solid var(--line)" class="pt-4">
+        <h3 class="text-sm font-semibold mb-2">Courses</h3>
+        <button id="settings-courses" class="w-full px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Edit courses</button>
+      </div>
+
+      <div style="border-top:1px solid var(--line)" class="pt-4">
+        <h3 class="text-sm font-semibold mb-1">Install</h3>
+        <p id="install-hint" class="text-xs mb-2" style="color:var(--muted)"></p>
+        <button id="install-btn" class="hidden w-full px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent);color:var(--on-accent)">Add to home screen</button>
+      </div>
+    </div>
+
+  </div>
 </aside>
+
+<!-- Focus mode -->
+<div id="focus-overlay" class="hidden">
+  <div id="focus-label" class="text-base font-semibold mb-2"></div>
+  <div id="focus-clock" class="countdown"></div>
+  <div id="focus-note" class="text-sm mt-2 mb-8" style="color:var(--muted)"></div>
+  <div class="bar w-full mb-8" style="max-width:520px"><div id="focus-fill" style="width:0%"></div></div>
+  <div class="flex flex-wrap gap-2 justify-center">
+    <button id="focus-done" class="px-6 py-3 rounded-xl font-semibold" style="background:var(--good);color:var(--on-good)">Done, next up</button>
+    <button id="focus-minus" class="px-4 py-3 rounded-xl font-medium" style="background:var(--panel-2);border:1px solid var(--line)">&minus;5</button>
+    <button id="focus-plus" class="px-4 py-3 rounded-xl font-medium" style="background:var(--panel-2);border:1px solid var(--line)">+5</button>
+    <button id="focus-break" class="px-4 py-3 rounded-xl font-medium" style="background:var(--panel-2);border:1px solid var(--line)">Break</button>
+  </div>
+  <button id="focus-exit" class="mt-10 text-sm hover:underline" style="color:var(--muted)">Leave focus mode</button>
+</div>
 
 <!-- Courses modal -->
 <div id="courses-modal" class="hidden modal-overlay">
@@ -229,7 +433,7 @@
     <div id="courses-rows" class="space-y-2 mb-3 max-h-72 overflow-y-auto pr-1"></div>
     <button id="courses-add" class="text-sm hover:underline" style="color:var(--accent)">Add a course</button>
     <p id="courses-note" class="text-xs mt-4" style="color:var(--muted)">Renaming a course moves its assignments with it. Removing one keeps its assignments under Other.</p>
-    <p id="courses-error" class="text-sm mt-2" style="color:#f87171"></p>
+    <p id="courses-error" class="text-sm mt-2" style="color:var(--danger)"></p>
     <div class="flex gap-2 justify-end mt-5">
       <button id="courses-cancel" class="px-4 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Cancel</button>
       <button id="courses-save" class="px-5 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent)">Save courses</button>
@@ -241,7 +445,7 @@
 <div id="auth-modal" class="hidden modal-overlay">
   <div class="modal-content">
     <h2 id="auth-title" class="text-xl font-bold mb-4">Log in</h2>
-    <p id="auth-error-msg" class="text-sm mb-3" style="color:#f87171"></p>
+    <p id="auth-error-msg" class="text-sm mb-3" style="color:var(--danger)"></p>
     <form id="auth-form" class="space-y-3">
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" class="field w-full px-3 py-2.5 text-sm" required>
       <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" class="field w-full px-3 py-2.5 text-sm" required>
@@ -283,16 +487,106 @@ const SUBJECT_COLORS = {
 const PALETTE = ["#f0a742", "#3ecf8e", "#f2708a", "#a78bfa", "#5b8def", "#e0736a",
                  "#7ed0c4", "#c084fc", "#6ee7b7", "#fbbf24", "#60a5fa", "#fb7185"];
 
-function colorFor(cls) {
-  const name = String(cls || '');
-  if (SUBJECT_COLORS[name]) return SUBJECT_COLORS[name];
-  if (!name.trim()) return "#8b95ab";
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
+function darken(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - amount));
+  const g = Math.round(((n >> 8) & 255) * (1 - amount));
+  const b = Math.round((n & 255) * (1 - amount));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
-const DEFAULT_MINUTES = 30;
+function colorFor(cls) {
+  const name = String(cls || '');
+  let base;
+  if (SUBJECT_COLORS[name]) base = SUBJECT_COLORS[name];
+  else if (!name.trim()) base = "#8b95ab";
+  else {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    base = PALETTE[h % PALETTE.length];
+  }
+  // The subject palette is tuned for dark panels; on a light theme it washes out.
+  return themeIsLight ? darken(base, 0.38) : base;
+}
+
+function applyTheme(id) {
+  const theme = THEMES.find(t => t.id === id) || THEMES[0];
+  THEMES.forEach(t => document.body.classList.remove(`theme-${t.id}`));
+  document.body.classList.add(`theme-${theme.id}`);
+  themeIsLight = theme.light;
+  settings.theme = theme.id;
+  try { localStorage.setItem('hh-theme', theme.id); } catch (e) { /* private mode */ }
+  const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+  const meta = document.getElementById('meta-theme-color');
+  if (meta && accent) meta.setAttribute('content', accent);
+  // Subject colours are written as inline styles, so everything has to repaint.
+  tonightSignature = null;
+  scheduleSignature = null;
+  renderTonight();
+  buildCalendar();
+  renderSchedule();
+  if ($('history-drawer').classList.contains('open')) showDrawerTab(currentDrawerTab);
+}
+
+/** Minutes to give a brand new task in this course. */
+function suggestMinutes(cls) {
+  if (settings.smartDurations) {
+    const samples = [];
+    Object.values(historyCache).forEach(day =>
+      Object.values(day.entries || {}).forEach(e => {
+        if (e.cls === cls && e.actualMs != null) samples.push(e.actualMs / 60000);
+      }));
+    if (samples.length >= 3) {
+      samples.sort((a, b) => a - b);
+      const mid = samples.length % 2
+        ? samples[(samples.length - 1) / 2]
+        : (samples[samples.length / 2 - 1] + samples[samples.length / 2]) / 2;
+      return Math.min(240, Math.max(5, Math.round(mid / 5) * 5));
+    }
+  }
+  return settings.defaultMinutes;
+}
+
+/** Steps by 5, but by 1 below five so short tasks are reachable. */
+function stepMinutes(value, dir) {
+  const v = Math.max(1, Number(value) || 1);
+  if (dir < 0) return v > 5 ? Math.max(5, v - 5) : Math.max(1, v - 1);
+  return v < 5 ? v + 1 : Math.min(600, v + 5);
+}
+
+async function saveSettings(patch) {
+  settings = { ...settings, ...patch };
+  if (!userId || !db) return;
+  try {
+    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/settings`), patch, { merge: true });
+  } catch (e) {
+    console.error("Error saving settings:", e);
+    showMessage("Couldn't save that setting. Check your connection and try again.");
+  }
+}
+
+const DEFAULT_MINUTES = 30;   // fallback only; the live default lives in settings
+
+const THEMES = [
+  { id: 'midnight', name: 'Midnight', light: false },
+  { id: 'ocean',    name: 'Ocean',    light: false },
+  { id: 'forest',   name: 'Forest',   light: false },
+  { id: 'plum',     name: 'Plum',     light: false },
+  { id: 'daylight', name: 'Daylight', light: true  },
+  { id: 'paper',    name: 'Paper',    light: true  }
+];
+
+const DEFAULT_SETTINGS = {
+  theme: 'midnight',
+  defaultMinutes: 30,
+  smartDurations: true,
+  chime: true,
+  autoAdd: true,
+  showDurations: false,
+  musicUrl: ''
+};
+let settings = { ...DEFAULT_SETTINGS };
+let themeIsLight = false;
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyDP8bQoUZe2bsuaoDECPkgPGLjCSup9j9c",
@@ -418,6 +712,9 @@ function escapeHtml(str) {
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 }
+
+const CARET_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M18 15l-6-6-6 6"/></svg>';
+const CARET_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M6 9l6 6 6-6"/></svg>';
 
 const CHECK_SVG = '<svg viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
 
@@ -669,14 +966,257 @@ function renderHistory() {
   });
 }
 
-function openHistory() {
-  renderHistory();
+let currentDrawerTab = 'history';
+const DRAWER_TITLES = { history: 'History', upcoming: 'Upcoming', music: 'Music', settings: 'Settings' };
+
+function showDrawerTab(name) {
+  currentDrawerTab = name;
+  document.querySelectorAll('.drawer-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== name));
+  $('drawer-title').textContent = DRAWER_TITLES[name];
+  if (name === 'history') renderHistory();
+  if (name === 'upcoming') renderUpcoming();
+  if (name === 'settings') renderSettingsPanel();
+  if (name === 'music') renderMusicPanel();
+}
+
+function openHistory(tab) {
+  showDrawerTab(tab || currentDrawerTab);
   $('history-drawer').classList.add('open');
   $('history-scrim').classList.remove('hidden');
 }
 function closeHistory() {
   $('history-drawer').classList.remove('open');
   $('history-scrim').classList.add('hidden');
+}
+
+/* ------------------------------------------------------------------ *
+ * Upcoming
+ * ------------------------------------------------------------------ */
+
+function renderUpcoming() {
+  const wrap = $('upcoming-body');
+  wrap.innerHTML = '';
+
+  const groups = new Map();
+  Object.values(tasksCache).forEach(t => {
+    if (t.done || t.isTonight) return;
+    const key = dayKey(t.date);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  });
+
+  const keys = [...groups.keys()].sort((a, b) => new Date(a) - new Date(b));
+  if (!keys.length) {
+    wrap.innerHTML = `<p class="text-sm" style="color:var(--muted)">Nothing waiting. Everything unfinished is already on tonight's list.</p>`;
+    return;
+  }
+
+  const todayMs = new Date(new Date().toDateString()).getTime();
+
+  keys.forEach(key => {
+    const date = new Date(key);
+    const overdue = date.getTime() < todayMs;
+
+    const head = document.createElement('div');
+    head.className = 'text-xs font-semibold mb-1.5 mt-1';
+    head.style.color = overdue ? 'var(--warn)' : 'var(--muted)';
+    head.textContent = overdue ? `${prettyDay(ymd(date))} \u00b7 past due` : prettyDay(ymd(date));
+
+    const ul = document.createElement('ul');
+    ul.className = 'space-y-1';
+    groups.get(key).forEach(t => {
+      const li = document.createElement('li');
+      li.className = 'flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs';
+      li.style.background = 'var(--panel-2)';
+      li.innerHTML = `
+        <span class="flex-1 min-w-0">
+          <span class="font-semibold" style="color:${colorFor(t.cls)}">${escapeHtml(t.cls)}</span>
+          <span class="ml-1">${escapeHtml(t.name)}</span>
+        </span>
+        <button class="shrink-0 px-2 py-1 rounded-md text-xs font-semibold"
+                style="background:var(--accent);color:var(--on-accent)">Tonight</button>`;
+      li.querySelector('button').onclick = () => {
+        updateTaskInDb(t.id, { isTonight: true, orderIndex: Date.now() });
+        renderUpcoming();
+      };
+      ul.appendChild(li);
+    });
+
+    const section = document.createElement('div');
+    section.append(head, ul);
+    wrap.appendChild(section);
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Settings panel
+ * ------------------------------------------------------------------ */
+
+function renderSettingsPanel() {
+  const grid = $('theme-grid');
+  grid.innerHTML = '';
+  THEMES.forEach(theme => {
+    const btn = document.createElement('button');
+    btn.className = 'text-left';
+    // Render each swatch in its own palette by borrowing the theme class.
+    const probe = document.createElement('div');
+    probe.className = `theme-${theme.id}`;
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const bg = cs.getPropertyValue('--panel').trim();
+    const accent = cs.getPropertyValue('--accent').trim();
+    const line = cs.getPropertyValue('--line').trim();
+    probe.remove();
+
+    btn.innerHTML = `
+      <span class="swatch block ${settings.theme === theme.id ? 'active' : ''}"
+            style="background:${bg};border-color:${settings.theme === theme.id ? 'var(--accent)' : line}">
+        <span style="position:absolute;left:7px;top:9px;width:16px;height:16px;border-radius:5px;background:${accent}"></span>
+      </span>
+      <span class="text-xs block mt-1" style="color:var(--muted)">${theme.name}</span>`;
+    btn.onclick = () => { applyTheme(theme.id); saveSettings({ theme: theme.id }); };
+    grid.appendChild(btn);
+  });
+
+  $('deflen-value').textContent = `${settings.defaultMinutes} min`;
+  [['sw-smart', 'smartDurations'], ['sw-chime', 'chime'],
+   ['sw-autoadd', 'autoAdd'], ['sw-durations', 'showDurations']]
+    .forEach(([id, key]) => $(id).classList.toggle('on', !!settings[key]));
+}
+
+function toggleSetting(key) {
+  saveSettings({ [key]: !settings[key] });
+  renderSettingsPanel();
+  if (key === 'showDurations') { syncDurationToggle(); buildCalendar(); }
+}
+
+function syncDurationToggle() {
+  $('toggle-durations').textContent = settings.showDurations ? 'Hide times' : 'Show times';
+}
+
+/* ------------------------------------------------------------------ *
+ * Music
+ * ------------------------------------------------------------------ */
+
+function embedUrl(raw) {
+  const value = (raw || '').trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') return { src: `https://www.youtube.com/embed/${url.pathname.slice(1)}?rel=0`, height: 200 };
+    if (host.endsWith('youtube.com')) {
+      const list = url.searchParams.get('list');
+      const v = url.searchParams.get('v');
+      if (list) return { src: `https://www.youtube.com/embed/videoseries?list=${list}`, height: 200 };
+      if (v) return { src: `https://www.youtube.com/embed/${v}?rel=0`, height: 200 };
+      if (url.pathname.startsWith('/embed/')) return { src: value, height: 200 };
+    }
+    if (host === 'open.spotify.com') {
+      const m = url.pathname.match(/\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
+      if (m) return { src: `https://open.spotify.com/embed/${m[1]}/${m[2]}`, height: m[1] === 'track' ? 152 : 352 };
+    }
+  } catch (e) { /* not a URL */ }
+  return null;
+}
+
+function renderMusicPanel() {
+  $('music-url').value = settings.musicUrl || '';
+  $('music-error').textContent = '';
+  const frame = $('music-frame');
+  frame.innerHTML = '';
+  const embed = embedUrl(settings.musicUrl);
+  if (embed) {
+    const iframe = document.createElement('iframe');
+    iframe.src = embed.src;
+    iframe.height = embed.height;
+    iframe.allow = 'autoplay; encrypted-media; clipboard-write; picture-in-picture';
+    iframe.loading = 'lazy';
+    frame.appendChild(iframe);
+  }
+  document.querySelectorAll('.amb-btn').forEach(b => b.classList.toggle('on', b.dataset.amb === ambMode));
+}
+
+let ambMode = 'off', ambNodes = null, ambTimer = null;
+
+function stopAmbient() {
+  if (ambTimer) { clearInterval(ambTimer); ambTimer = null; }
+  if (ambNodes && audioCtx) {
+    const t = audioCtx.currentTime;
+    try {
+      ambNodes.master.gain.cancelScheduledValues(t);
+      ambNodes.master.gain.setValueAtTime(ambNodes.master.gain.value, t);
+      ambNodes.master.gain.linearRampToValueAtTime(0.0001, t + 1);
+      ambNodes.voices.forEach(v => { v.osc.stop(t + 1.1); v.lfo.stop(t + 1.1); });
+    } catch (e) { /* already stopped */ }
+  }
+  ambNodes = null;
+  ambMode = 'off';
+}
+
+function startAmbient(mode) {
+  stopAmbient();
+  ensureAudio();
+  if (!audioCtx) return;
+  ambMode = mode;
+
+  const master = audioCtx.createGain();
+  master.gain.value = 0.0001;
+  master.connect(audioCtx.destination);
+  master.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 3);
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 1500;
+  filter.connect(master);
+
+  const delay = audioCtx.createDelay(3);
+  delay.delayTime.value = 0.62;
+  const feedback = audioCtx.createGain();
+  feedback.gain.value = 0.34;
+  delay.connect(feedback); feedback.connect(delay); delay.connect(filter);
+
+  // Three detuned sines drifting against each other never land in the same
+  // place twice, which is what makes it endless without looping.
+  const voices = [110, 164.81, 220].map(freq => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.07;
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.value = 0.03 + Math.random() * 0.06;
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 0.05;
+    lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+    osc.connect(gain); gain.connect(filter);
+    osc.start(); lfo.start();
+    return { osc, lfo };
+  });
+
+  ambNodes = { master, filter, delay, voices };
+
+  if (mode === 'keys') {
+    const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+    ambTimer = setInterval(() => {
+      if (!ambNodes || Math.random() > 0.6) return;
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = scale[Math.floor(Math.random() * scale.length)];
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.11, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+      osc.connect(gain);
+      gain.connect(ambNodes.filter);
+      gain.connect(ambNodes.delay);
+      osc.start(t); osc.stop(t + 2.8);
+    }, 1500);
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -702,7 +1242,7 @@ async function maybeRollover() {
       if (t.isTonight && t.done) {
         batch.set(doc(tasksRef, t.id), { isTonight: false }, { merge: true });
         cleared++;
-      } else if (!t.isTonight && !t.done && dayKey(t.date) === dueNext) {
+      } else if (settings.autoAdd && !t.isTonight && !t.done && dayKey(t.date) === dueNext) {
         batch.set(doc(tasksRef, t.id), { isTonight: true, orderIndex: Date.now() + (i++) }, { merge: true });
         added++;
       }
@@ -751,7 +1291,7 @@ function computeSchedule(now = Date.now()) {
   let active = null;
 
   for (const t of tasks) {
-    const dur = Math.max(1, Number(t.time) || DEFAULT_MINUTES) * 60000;
+    const dur = Math.max(1, Number(t.time) || settings.defaultMinutes) * 60000;
 
     if (t.done) {
       const c = scheduleMeta.completions?.[t.id] || {};
@@ -850,10 +1390,14 @@ async function setTaskDone(taskId, done) {
   await updateTaskInDb(taskId, { done });
 }
 
-async function addMinutes(taskId, delta) {
+async function stepTask(taskId, dir) {
   const task = tasksCache[taskId];
   if (!task) return;
-  const next = Math.max(5, (Number(task.time) || DEFAULT_MINUTES) + delta);
+  const next = stepMinutes(task.time, dir);
+  tasksCache[taskId] = { ...task, time: next };   // instant, so the arrows feel live
+  tonightSignature = null;
+  renderTonight();
+  renderSchedule();
   await updateTaskInDb(taskId, { time: next });
 }
 
@@ -874,7 +1418,7 @@ function tonightRow(t) {
   li.innerHTML = `
     <button class="done-btn shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
             title="Mark done"
-            style="border:2px solid ${t.done ? 'var(--good)' : '#4a5468'};background:${t.done ? 'var(--good)' : 'transparent'};color:#0a0d14">
+            style="border:2px solid ${t.done ? 'var(--good)' : 'var(--edge)'};background:${t.done ? 'var(--good)' : 'transparent'};color:var(--on-good)">
       ${t.done ? CHECK_SVG : ''}
     </button>
     <span class="flex-1 min-w-0 text-sm cursor-grab ${t.done ? 'line-through' : ''}">
@@ -883,7 +1427,7 @@ function tonightRow(t) {
     </span>
     ${took != null
       ? `<span class="text-xs shrink-0 countdown" style="color:${took > planned ? 'var(--warn)' : 'var(--muted)'}">${planned}&rarr;${took} min</span>`
-      : `<input type="number" min="5" step="5" value="${planned}"
+      : `<input type="number" min="1" step="1" value="${planned}"
                 aria-label="Minutes for ${escapeHtml(t.name)}"
                 class="field w-14 px-1 py-1 text-xs text-center shrink-0">
          <span class="text-xs shrink-0" style="color:var(--muted)">min</span>`}
@@ -895,7 +1439,7 @@ function tonightRow(t) {
   li.querySelector('.remove-btn').addEventListener('click', () => updateTaskInDb(t.id, { isTonight: false }));
   const minutes = li.querySelector('input[type="number"]');
   if (minutes) minutes.addEventListener('change', (e) => {
-    const v = Math.max(5, parseInt(e.target.value, 10) || DEFAULT_MINUTES);
+    const v = Math.max(1, parseInt(e.target.value, 10) || settings.defaultMinutes);
     e.target.value = v;
     updateTaskInDb(t.id, { time: v });
   });
@@ -981,18 +1525,24 @@ function buildScheduleRow(row) {
       </div>
       <div class="bar mb-3 js-bar"><div class="js-fill" style="width:0%"></div></div>
       <div class="flex gap-2">
-        <button class="sched-done flex-1 px-3 py-2 rounded-lg text-sm font-semibold" style="background:var(--good);color:#08130d">Done, next up</button>
-        <button class="sched-plus px-3 py-2 rounded-lg text-sm font-medium" style="background:var(--panel);border:1px solid var(--line)">+5 min</button>
+        <button class="sched-done flex-1 px-3 py-2 rounded-lg text-sm font-semibold" style="background:var(--good);color:var(--on-good)">Done, next up</button>
+        <div class="flex items-center rounded-lg overflow-hidden shrink-0" style="background:var(--panel);border:1px solid var(--line)">
+          <button class="sched-minus px-2.5 py-2" title="Less time">${CARET_DOWN}</button>
+          <span class="js-mins text-sm font-semibold countdown w-14 text-center"></span>
+          <button class="sched-plus px-2.5 py-2" title="More time">${CARET_UP}</button>
+        </div>
       </div>`;
     li.querySelector('.sched-done').addEventListener('click', () => setTaskDone(t.id, true));
-    li.querySelector('.sched-plus').addEventListener('click', () => addMinutes(t.id, 5));
+    li.querySelector('.sched-plus').addEventListener('click', () => stepTask(t.id, 1));
+    li.querySelector('.sched-minus').addEventListener('click', () => stepTask(t.id, -1));
     return {
       li, state: 'active',
       times: li.querySelector('.js-times'),
       clock: li.querySelector('.js-clock'),
       note: li.querySelector('.js-note'),
       bar: li.querySelector('.js-bar'),
-      fill: li.querySelector('.js-fill')
+      fill: li.querySelector('.js-fill'),
+      mins: li.querySelector('.js-mins')
     };
   }
 
@@ -1003,7 +1553,7 @@ function buildScheduleRow(row) {
   li.innerHTML = `
     <button class="sched-toggle shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
             title="${isDone ? 'Mark not done' : 'Mark done'}"
-            style="border:2px solid ${isDone ? 'var(--good)' : '#4a5468'};background:${isDone ? 'var(--good)' : 'transparent'};color:#0a0d14">
+            style="border:2px solid ${isDone ? 'var(--good)' : 'var(--edge)'};background:${isDone ? 'var(--good)' : 'transparent'};color:var(--on-good)">
       ${isDone ? CHECK_SVG : ''}
     </button>
     <span class="flex-1 min-w-0 text-sm ${isDone ? 'line-through' : ''}">${label}</span>
@@ -1071,6 +1621,7 @@ function paintScheduleTimes(info, now) {
                           : over ? `+${fmtDur(remaining)}`
                           : fmtDur(remaining);
     ref.clock.style.color = over ? 'var(--warn)' : 'var(--text)';
+    if (ref.mins) ref.mins.textContent = `${Math.max(1, Number(row.task.time) || DEFAULT_MINUTES)}m`;
     ref.note.textContent = pending ? 'until start' : over ? 'over time' : 'left';
     ref.li.style.border = `1px solid ${over ? 'var(--warn)' : 'var(--accent)'}`;
     ref.bar.classList.toggle('over', over);
@@ -1078,6 +1629,8 @@ function paintScheduleTimes(info, now) {
   });
 
   $('stop-schedule').classList.toggle('hidden', !info.started);
+  $('focus-enter').classList.toggle('hidden', !info.started || !info.active);
+  paintFocus(info, now);
   $('generate-schedule').textContent = info.started ? 'Restart' : 'Start schedule';
 
   if (info.started && info.active) {
@@ -1090,7 +1643,7 @@ function paintScheduleTimes(info, now) {
     const key = `${info.active.task.id}|${info.active.end}`;
     if (remaining <= 0 && remaining > -3000 && chimedFor !== key) {
       chimedFor = key;
-      playChime();
+      if (settings.chime) playChime();
     }
   } else {
     $('finish-label').textContent = (info.started && info.rows.length) ? 'All finished' : '';
@@ -1103,7 +1656,7 @@ function paintBreakControls(now) {
   const info = $('break-info');
   if (scheduleMeta.breakStartedAt) {
     btn.textContent = 'Back to work';
-    btn.style.cssText = 'background:#e04a4a;color:#fff;border:none';
+    btn.style.cssText = 'background:var(--danger);color:#fff;border:none';
     info.textContent = `On break for ${fmtDur(now - scheduleMeta.breakStartedAt)} \u2014 the clock is paused.`;
   } else {
     btn.textContent = 'Take a break';
@@ -1111,6 +1664,54 @@ function paintBreakControls(now) {
     const shifted = Math.round((scheduleMeta.shiftMs || 0) / 60000);
     info.textContent = shifted > 0 ? `Pushed back ${fmtMinutes(shifted)} by breaks so far.` : '';
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Focus mode
+ * ------------------------------------------------------------------ */
+
+let focusOn = false;
+
+function enterFocus() {
+  focusOn = true;
+  $('focus-overlay').classList.remove('hidden');
+  renderSchedule();
+}
+function exitFocus() {
+  focusOn = false;
+  $('focus-overlay').classList.add('hidden');
+}
+
+function paintFocus(info, now) {
+  if (!focusOn) return;
+  if (!info.started) { exitFocus(); return; }
+
+  const row = info.active;
+  if (!row) {
+    $('focus-label').textContent = 'Tonight is finished.';
+    $('focus-clock').textContent = 'Done';
+    $('focus-note').textContent = '';
+    $('focus-fill').style.width = '100%';
+    return;
+  }
+
+  const total = Math.max(1, row.end - row.start);
+  const remaining = row.end - now;
+  const pending = now < row.start;
+  const over = remaining < 0;
+
+  $('focus-label').innerHTML =
+    `<span style="color:${colorFor(row.task.cls)}">${escapeHtml(row.task.cls)}</span> &nbsp;${escapeHtml(row.task.name)}`;
+  $('focus-clock').textContent = pending ? fmtDur(row.start - now) : (over ? `+${fmtDur(remaining)}` : fmtDur(remaining));
+  $('focus-clock').style.color = over ? 'var(--warn)' : 'var(--text)';
+  $('focus-note').textContent = scheduleMeta.breakStartedAt
+    ? 'Paused'
+    : pending ? `starts at ${fmtClock(row.start)}`
+    : over ? `over your ${Math.max(1, Number(row.task.time) || settings.defaultMinutes)} minutes`
+    : `of ${Math.max(1, Number(row.task.time) || settings.defaultMinutes)} minutes`;
+  $('focus-fill').style.width = `${pending ? 0 : Math.min(100, ((now - row.start) / total) * 100)}%`;
+  $('focus-fill').parentElement.classList.toggle('over', over);
+  $('focus-break').textContent = scheduleMeta.breakStartedAt ? 'Back to work' : 'Break';
 }
 
 /* ------------------------------------------------------------------ *
@@ -1172,7 +1773,7 @@ function buildCalendar() {
           id: crypto.randomUUID(),
           name,
           cls,
-          time: DEFAULT_MINUTES,
+          time: suggestMinutes(cls),
           done: false,
           isTonight: dateStr === nextSchoolDay,
           date: dateStr,
@@ -1219,16 +1820,22 @@ function calendarRow(t) {
   li.innerHTML = `
     <button class="tonight-btn shrink-0 w-4 h-4 rounded flex items-center justify-center"
             title="${t.isTonight ? "Remove from tonight" : "Add to tonight"}"
-            style="border:2px solid ${t.isTonight ? 'var(--accent)' : '#4a5468'};background:${t.isTonight ? 'var(--accent)' : 'transparent'};color:#0a0d14">
+            style="border:2px solid ${t.isTonight ? 'var(--accent)' : 'var(--edge)'};background:${t.isTonight ? 'var(--accent)' : 'transparent'};color:var(--on-accent)">
       ${t.isTonight ? CHECK_SVG : ''}
     </button>
     <span class="flex-1 min-w-0 break-words ${t.done ? 'line-through' : ''}">${escapeHtml(t.name)}</span>
+    ${settings.showDurations ? `
+      <span class="flex items-center shrink-0 rounded-md" style="border:1px solid var(--line)">
+        <button class="cal-minus px-1 py-0.5" title="Less time">${CARET_DOWN}</button>
+        <span class="cal-mins text-xs countdown w-8 text-center" style="color:var(--muted)">${Number(t.time) || DEFAULT_MINUTES}</span>
+        <button class="cal-plus px-1 py-0.5" title="More time">${CARET_UP}</button>
+      </span>` : ''}
     <button class="done-btn shrink-0 w-4 h-4 rounded-full flex items-center justify-center"
             title="Mark done"
-            style="border:2px solid ${t.done ? 'var(--good)' : '#4a5468'};background:${t.done ? 'var(--good)' : 'transparent'};color:#0a0d14">
+            style="border:2px solid ${t.done ? 'var(--good)' : 'var(--edge)'};background:${t.done ? 'var(--good)' : 'transparent'};color:var(--on-good)">
       ${t.done ? CHECK_SVG : ''}
     </button>
-    <button class="delete-btn shrink-0 leading-none px-0.5" title="Delete" style="color:#8b95ab">&times;</button>
+    <button class="delete-btn shrink-0 leading-none px-0.5" title="Delete" style="color:var(--muted)">&times;</button>
   `;
 
   li.querySelector('.tonight-btn').addEventListener('click', () => {
@@ -1236,6 +1843,11 @@ function calendarRow(t) {
   });
   li.querySelector('.done-btn').addEventListener('click', () => setTaskDone(t.id, !t.done));
   li.querySelector('.delete-btn').addEventListener('click', () => deleteWithUndo(t));
+  const calMinus = li.querySelector('.cal-minus');
+  if (calMinus) {
+    calMinus.addEventListener('click', () => stepTask(t.id, -1));
+    li.querySelector('.cal-plus').addEventListener('click', () => stepTask(t.id, 1));
+  }
   return li;
 }
 
@@ -1299,7 +1911,7 @@ function buildCalendarMobile() {
     const btn = document.createElement('button');
     btn.className = 'py-1.5 rounded-lg text-xs font-semibold leading-tight';
     btn.style.cssText = selected
-      ? 'background:var(--accent);color:#fff'
+      ? 'background:var(--accent);color:var(--on-accent)'
       : 'background:var(--panel-2);border:1px solid var(--line);color:var(--muted)';
     btn.innerHTML = `${d.toLocaleDateString(undefined, { weekday: 'short' })}<br>
       <span style="font-weight:500">${count ? count : '\u00b7'}</span>`;
@@ -1353,7 +1965,7 @@ function buildCalendarMobile() {
       id: crypto.randomUUID(),
       name,
       cls: select.value,
-      time: DEFAULT_MINUTES,
+      time: suggestMinutes(select.value),
       done: false,
       isTonight: dateStr === nextSchoolDay,
       date: dateStr,
@@ -1590,6 +2202,13 @@ function attachListeners() {
   unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
     const saved = snap.exists() ? snap.data().classes : null;
     settingsCache = snap.exists() ? snap.data() : {};
+    const before = settings.theme;
+    settings = { ...DEFAULT_SETTINGS };
+    Object.keys(DEFAULT_SETTINGS).forEach(k => {
+      if (settingsCache[k] !== undefined && settingsCache[k] !== null) settings[k] = settingsCache[k];
+    });
+    syncDurationToggle();
+    if (settings.theme !== before) applyTheme(settings.theme);
     classList = (Array.isArray(saved) && saved.length) ? saved.slice() : [...CLASSES];
     settingsLoaded = true;
     buildCalendar();
@@ -1686,7 +2305,7 @@ function addCustomTask() {
     id: crypto.randomUUID(),
     name,
     cls: "Custom",
-    time: DEFAULT_MINUTES,
+    time: suggestMinutes("Custom"),
     done: false,
     isTonight: true,
     date: getNextSchoolDay(new Date()).toDateString(),
@@ -1719,10 +2338,165 @@ $('generate-schedule').onclick = () => { ensureAudio(); startSchedule(); };
 $('stop-schedule').onclick = stopSchedule;
 $('break-btn').onclick = toggleBreak;
 
-$('history-tab').onclick = openHistory;
+/* ------------------------------------------------------------------ *
+ * Installable app
+ *
+ * The icon is drawn on a canvas and the manifest is built as a blob, so the
+ * whole thing still ships as one file with nothing to upload alongside it.
+ * ------------------------------------------------------------------ */
+
+let installPrompt = null;
+
+function buildAppIcon() {
+  const size = 512, r = 112;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cs = getComputedStyle(document.body);
+  const accent = cs.getPropertyValue('--accent').trim() || '#5b8def';
+  const ink = cs.getPropertyValue('--on-accent').trim() || '#ffffff';
+
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0, 0, size, size, r);
+  else ctx.rect(0, 0, size, size);
+  ctx.fill();
+
+  // A clock face with a tick mark through it: time plus done.
+  ctx.strokeStyle = ink;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 26;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, 150, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 46;
+  ctx.beginPath();
+  ctx.moveTo(168, 262);
+  ctx.lineTo(232, 328);
+  ctx.lineTo(348, 190);
+  ctx.stroke();
+
+  return canvas.toDataURL('image/png');
+}
+
+function installAppBits() {
+  try {
+    const icon = buildAppIcon();
+    const cs = getComputedStyle(document.body);
+
+    const apple = document.createElement('link');
+    apple.rel = 'apple-touch-icon';
+    apple.href = icon;
+    document.head.appendChild(apple);
+
+    const favicon = document.createElement('link');
+    favicon.rel = 'icon';
+    favicon.type = 'image/png';
+    favicon.href = icon;
+    document.head.appendChild(favicon);
+
+    const manifest = {
+      name: 'Homework Hub',
+      short_name: 'Homework',
+      start_url: location.pathname,
+      scope: location.pathname,
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: cs.getPropertyValue('--bg').trim() || '#0a0d14',
+      theme_color: cs.getPropertyValue('--accent').trim() || '#5b8def',
+      icons: [{ src: icon, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }]
+    };
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+    document.head.appendChild(link);
+  } catch (e) {
+    console.error("Couldn't set up the app icon:", e);
+  }
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  $('install-btn').classList.remove('hidden');
+  $('install-hint').textContent = 'Adds a Homework Hub icon to your home screen and opens without the browser bars.';
+});
+
+$('install-btn').onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  $('install-btn').classList.add('hidden');
+};
+
+/* ------------------------------------------------------------------ *
+ * Sidebar, settings and focus wiring
+ * ------------------------------------------------------------------ */
+
+document.querySelectorAll('.drawer-tab').forEach(btn => {
+  btn.onclick = () => showDrawerTab(btn.dataset.tab);
+});
+
+$('set-smart').onclick = () => toggleSetting('smartDurations');
+$('set-chime').onclick = () => { toggleSetting('chime'); if (settings.chime) playChime(); };
+$('set-autoadd').onclick = () => toggleSetting('autoAdd');
+$('set-durations').onclick = () => toggleSetting('showDurations');
+$('settings-courses').onclick = () => { closeHistory(); openCourseEditor(); };
+
+$('deflen-down').onclick = () => { saveSettings({ defaultMinutes: stepMinutes(settings.defaultMinutes, -1) }); renderSettingsPanel(); };
+$('deflen-up').onclick = () => { saveSettings({ defaultMinutes: stepMinutes(settings.defaultMinutes, 1) }); renderSettingsPanel(); };
+
+$('toggle-durations').onclick = () => {
+  saveSettings({ showDurations: !settings.showDurations });
+  syncDurationToggle();
+  buildCalendar();
+};
+
+$('music-save').onclick = () => {
+  const raw = $('music-url').value;
+  if (raw.trim() && !embedUrl(raw)) {
+    $('music-error').textContent = "That doesn't look like a YouTube or Spotify link.";
+    return;
+  }
+  saveSettings({ musicUrl: raw.trim() });
+  renderMusicPanel();
+};
+
+document.querySelectorAll('.amb-btn').forEach(btn => {
+  btn.onclick = () => {
+    if (btn.dataset.amb === 'off') stopAmbient();
+    else startAmbient(btn.dataset.amb);
+    document.querySelectorAll('.amb-btn').forEach(b => b.classList.toggle('on', b.dataset.amb === ambMode));
+  };
+});
+
+$('focus-enter').onclick = enterFocus;
+$('focus-exit').onclick = exitFocus;
+$('focus-break').onclick = toggleBreak;
+$('focus-done').onclick = () => {
+  const active = computeSchedule().active;
+  if (active) setTaskDone(active.task.id, true);
+};
+$('focus-minus').onclick = () => {
+  const active = computeSchedule().active;
+  if (active) stepTask(active.task.id, -1);
+};
+$('focus-plus').onclick = () => {
+  const active = computeSchedule().active;
+  if (active) stepTask(active.task.id, 1);
+};
+
+$('history-tab').onclick = () => openHistory();
 $('history-close').onclick = closeHistory;
 $('history-scrim').onclick = closeHistory;
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHistory(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (focusOn) exitFocus(); else closeHistory();
+});
 
 // Phone layout is decided up front and re-decided if the window crosses 640px.
 document.body.classList.toggle('compact', mobileMode);
@@ -1740,6 +2514,16 @@ window.addEventListener('resize', () => {
 
 // Start time defaults to right now
 $('schedule-start-time-input').value = new Date().toTimeString().slice(0, 5);
+
+let bootTheme = DEFAULT_SETTINGS.theme;
+try { bootTheme = localStorage.getItem('hh-theme') || bootTheme; } catch (e) { /* private mode */ }
+document.body.classList.add(`theme-${THEMES.some(t => t.id === bootTheme) ? bootTheme : DEFAULT_SETTINGS.theme}`);
+themeIsLight = !!(THEMES.find(t => t.id === bootTheme) || {}).light;
+settings.theme = bootTheme;
+
+installAppBits();
+$('install-hint').textContent = "Your browser's menu has an Add to home screen option if no button appears here.";
+syncDurationToggle();
 
 buildCalendar();
 renderTonight();
