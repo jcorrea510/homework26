@@ -174,6 +174,25 @@
   #focus-overlay.hidden { display: none; }
   #focus-clock { font-size: clamp(4rem, 22vw, 9rem); font-weight: 800; line-height: 1; letter-spacing: -.04em; }
 
+  /* Mini player */
+  #mini-player {
+    position: fixed; left: 1rem; bottom: 1rem; z-index: 1120; width: 360px; max-width: calc(100vw - 2rem);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: .7rem .8rem; box-shadow: 0 10px 34px rgba(0,0,0,.45);
+    animation: toast-in .22s ease;
+  }
+  #mini-player.hidden { display: none; }
+  .mini-ctl {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  }
+  .mini-ctl:disabled { opacity: .3; }
+  #mini-track { height: 5px; }
+  body.has-mini #toast-wrap { bottom: 6.5rem; }
+  body.compact #mini-player { left: .75rem; right: .75rem; width: auto; max-width: none; }
+  body.compact.has-mini #history-tab { bottom: 9.5rem; }
+
   /* Music */
   #music-frame iframe { width: 100%; border: 0; border-radius: 12px; }
   .amb-btn { flex: 1; padding: .6rem 0; border-radius: 10px; font-size: .78rem; font-weight: 600;
@@ -297,6 +316,23 @@
   </div>
 </div>
 
+<div id="mini-player" class="hidden">
+  <div class="flex items-center gap-2">
+    <button id="mini-prev" class="mini-ctl" title="Previous"></button>
+    <button id="mini-play" class="mini-ctl" title="Play"></button>
+    <button id="mini-next" class="mini-ctl" title="Next"></button>
+    <div class="flex-1 min-w-0 ml-1">
+      <div id="mini-title" class="text-xs font-semibold truncate">Loading\u2026</div>
+      <div class="flex items-center gap-2 mt-1">
+        <span id="mini-cur" class="text-xs countdown shrink-0" style="color:var(--muted)">0:00</span>
+        <div id="mini-track" class="bar flex-1 cursor-pointer"><div id="mini-fill" style="width:0%"></div></div>
+        <span id="mini-dur" class="text-xs countdown shrink-0" style="color:var(--muted)">0:00</span>
+      </div>
+    </div>
+    <button id="mini-close" class="shrink-0 text-lg leading-none px-1" title="Hide controls" style="color:var(--muted)">&times;</button>
+  </div>
+</div>
+
 <div id="toast-wrap"></div>
 
 <!-- Sidebar -->
@@ -338,6 +374,7 @@
           <button id="music-save" class="px-3 py-1.5 rounded-lg text-xs font-semibold" style="background:var(--accent);color:var(--on-accent)">Load</button>
         </div>
         <p id="music-error" class="text-xs mt-2" style="color:var(--danger)"></p>
+        <button id="music-popout" class="hidden w-full mt-3 px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--panel-2);border:1px solid var(--line)">Show player controls</button>
         <div id="music-frame" class="mt-3"></div>
       </div>
       <div style="border-top:1px solid var(--line)" class="pt-4">
@@ -1113,51 +1150,228 @@ function syncDurationToggle() {
  * Music
  * ------------------------------------------------------------------ */
 
-function embedUrl(raw) {
+const ICON_PLAY  = '<svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M8 5.5v13l11-6.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>';
+const ICON_PREV  = '<svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M7 5h2.2v14H7zM19 5.5v13L9.8 12z"/></svg>';
+const ICON_NEXT  = '<svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M14.8 5h2.2v14h-2.2zM5 5.5v13L14.2 12z"/></svg>';
+
+/** Understands YouTube and Spotify links and pulls out what each API needs. */
+function parseMedia(raw) {
   const value = (raw || '').trim();
   if (!value) return null;
   try {
     const url = new URL(value);
     const host = url.hostname.replace(/^www\./, '');
-    if (host === 'youtu.be') return { src: `https://www.youtube.com/embed/${url.pathname.slice(1)}?rel=0`, height: 200 };
+
+    if (host === 'youtu.be') return { kind: 'youtube', videoId: url.pathname.slice(1), listId: null };
     if (host.endsWith('youtube.com')) {
-      const list = url.searchParams.get('list');
-      const v = url.searchParams.get('v');
-      if (list) return { src: `https://www.youtube.com/embed/videoseries?list=${list}`, height: 200 };
-      if (v) return { src: `https://www.youtube.com/embed/${v}?rel=0`, height: 200 };
-      if (url.pathname.startsWith('/embed/')) return { src: value, height: 200 };
+      const listId = url.searchParams.get('list');
+      const videoId = url.searchParams.get('v') ||
+        (url.pathname.startsWith('/embed/') ? url.pathname.slice(7).split('/')[0] : null);
+      if (listId || videoId) return { kind: 'youtube', videoId: videoId || null, listId };
     }
     if (host === 'open.spotify.com') {
       const m = url.pathname.match(/\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
-      if (m) return { src: `https://open.spotify.com/embed/${m[1]}/${m[2]}`, height: m[1] === 'track' ? 152 : 352 };
+      if (m) return { kind: 'spotify', type: m[1], id: m[2], uri: `spotify:${m[1]}:${m[2]}`,
+                      height: m[1] === 'track' ? 152 : 352 };
     }
   } catch (e) { /* not a URL */ }
   return null;
 }
 
-let currentEmbedSrc = null;
+const mediaKey = (m) => m ? JSON.stringify(m) : null;
+
+/* --- players ------------------------------------------------------- */
+
+let mountedKey = null;
+let ytPlayer = null, spController = null;
+let spState = null, spTitle = '';
+let miniDismissed = false, mediaEverPlayed = false;
+
+let ytApiPromise = null;
+function loadYouTubeApi() {
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve, reject) => {
+    if (window.YT && window.YT.Player) return resolve(window.YT);
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (previous) previous(); resolve(window.YT); };
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    tag.onerror = reject;
+    document.head.appendChild(tag);
+  });
+  return ytApiPromise;
+}
+
+let spApiPromise = null;
+function loadSpotifyApi() {
+  if (spApiPromise) return spApiPromise;
+  spApiPromise = new Promise((resolve, reject) => {
+    window.onSpotifyIframeApiReady = (api) => resolve(api);
+    const tag = document.createElement('script');
+    tag.src = 'https://open.spotify.com/embed/iframe-api/v1';
+    tag.onerror = reject;
+    document.head.appendChild(tag);
+  });
+  return spApiPromise;
+}
+
+function teardownMedia() {
+  try { if (ytPlayer) ytPlayer.destroy(); } catch (e) { /* already gone */ }
+  try { if (spController) spController.destroy(); } catch (e) { /* already gone */ }
+  ytPlayer = null; spController = null; spState = null; spTitle = '';
+  mediaEverPlayed = false;
+  $('music-frame').innerHTML = '';
+}
+
+async function mountMedia(media) {
+  teardownMedia();
+  if (!media) { mountedKey = null; updateMiniPlayer(); return; }
+  mountedKey = mediaKey(media);
+  const frame = $('music-frame');
+
+  if (media.kind === 'youtube') {
+    const holder = document.createElement('div');
+    frame.appendChild(holder);
+    try {
+      const YT = await loadYouTubeApi();
+      const playerVars = { rel: 0, playsinline: 1 };
+      if (media.listId) { playerVars.listType = 'playlist'; playerVars.list = media.listId; }
+      ytPlayer = new YT.Player(holder, {
+        height: '200', width: '100%',
+        videoId: media.videoId || undefined,
+        playerVars,
+        events: {
+          onReady: () => updateMiniPlayer(),
+          onStateChange: (e) => {
+            if (e.data === 1) { mediaEverPlayed = true; miniDismissed = false; }
+            updateMiniPlayer();
+          }
+        }
+      });
+    } catch (e) {
+      $('music-error').textContent = "Couldn't reach YouTube.";
+    }
+    return;
+  }
+
+  // Spotify
+  const holder = document.createElement('div');
+  frame.appendChild(holder);
+  try {
+    const api = await loadSpotifyApi();
+    api.createController(holder, { uri: media.uri, width: '100%', height: media.height }, (controller) => {
+      spController = controller;
+      controller.addListener('playback_update', (e) => {
+        spState = e.data;
+        if (!e.data.isPaused) { mediaEverPlayed = true; miniDismissed = false; }
+        updateMiniPlayer();
+      });
+    });
+    // The embed API has no title, but the public oEmbed endpoint does.
+    fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/${media.type}/${media.id}`)}`)
+      .then(r => r.json()).then(d => { spTitle = d.title || ''; updateMiniPlayer(); })
+      .catch(() => { /* title stays generic */ });
+  } catch (e) {
+    $('music-error').textContent = "Couldn't reach Spotify.";
+  }
+}
 
 function renderMusicPanel() {
   if (document.activeElement !== $('music-url')) $('music-url').value = settings.musicUrl || '';
   $('music-error').textContent = '';
-  const frame = $('music-frame');
-  const embed = embedUrl(settings.musicUrl);
+  const media = parseMedia(settings.musicUrl);
 
-  // Rebuilding the iframe restarts the player, so only touch it when the
-  // link itself changed.
-  const src = embed ? embed.src : null;
-  if (src !== currentEmbedSrc) {
-    currentEmbedSrc = src;
-    frame.innerHTML = '';
-    if (embed) {
-      const iframe = document.createElement('iframe');
-      iframe.src = embed.src;
-      iframe.height = embed.height;
-      iframe.allow = 'autoplay; encrypted-media; clipboard-write; picture-in-picture';
-      frame.appendChild(iframe);
-    }
-  }
+  // Remounting restarts playback, so only do it when the link itself changed.
+  if (mediaKey(media) !== mountedKey) mountMedia(media);
+
+  $('music-popout').classList.toggle('hidden', !media);
   document.querySelectorAll('.amb-btn').forEach(b => b.classList.toggle('on', b.dataset.amb === ambMode));
+}
+
+/* --- the bar on the main screen ------------------------------------ */
+
+function fmtSecs(total) {
+  if (!isFinite(total) || total < 0) total = 0;
+  const m = Math.floor(total / 60), sec = Math.floor(total % 60);
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+/** One shape both players report into, so the bar doesn't care which is playing. */
+function mediaStatus() {
+  if (ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+    let list = null;
+    try { list = ytPlayer.getPlaylist(); } catch (e) { /* single video */ }
+    let title = '';
+    try { title = (ytPlayer.getVideoData() || {}).title || ''; } catch (e) { /* not ready */ }
+    const state = ytPlayer.getPlayerState();
+    return {
+      ok: true,
+      playing: state === 1 || state === 3,
+      position: ytPlayer.getCurrentTime() || 0,
+      duration: ytPlayer.getDuration() || 0,
+      title: title || 'YouTube',
+      canSkip: !!(list && list.length > 1),
+      canSeek: true
+    };
+  }
+  if (spController) {
+    return {
+      ok: true,
+      playing: !!(spState && !spState.isPaused),
+      position: spState ? spState.position / 1000 : 0,
+      duration: spState ? spState.duration / 1000 : 0,
+      title: spTitle || 'Spotify',
+      canSkip: false,     // the Spotify embed API exposes no track skipping
+      canSeek: true
+    };
+  }
+  return { ok: false };
+}
+
+function updateMiniPlayer() {
+  const bar = $('mini-player');
+  const status = mediaStatus();
+  const show = status.ok && mediaEverPlayed && !miniDismissed;
+
+  bar.classList.toggle('hidden', !show);
+  document.body.classList.toggle('has-mini', show);
+  if (!show) return;
+
+  $('mini-play').innerHTML = status.playing ? ICON_PAUSE : ICON_PLAY;
+  $('mini-play').title = status.playing ? 'Pause' : 'Play';
+  $('mini-prev').innerHTML = ICON_PREV;
+  $('mini-next').innerHTML = ICON_NEXT;
+  $('mini-prev').disabled = !status.canSkip;
+  $('mini-next').disabled = !status.canSkip;
+  $('mini-prev').title = status.canSkip ? 'Previous' : 'Skipping needs a playlist';
+  $('mini-next').title = status.canSkip ? 'Next' : 'Skipping needs a playlist';
+  $('mini-title').textContent = status.title;
+  $('mini-cur').textContent = fmtSecs(status.position);
+  $('mini-dur').textContent = fmtSecs(status.duration);
+  $('mini-fill').style.width = status.duration ? `${Math.min(100, (status.position / status.duration) * 100)}%` : '0%';
+}
+
+function mediaCommand(name) {
+  const status = mediaStatus();
+  if (!status.ok) return;
+  if (ytPlayer) {
+    if (name === 'toggle') status.playing ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+    if (name === 'next') ytPlayer.nextVideo();
+    if (name === 'prev') ytPlayer.previousVideo();
+  } else if (spController) {
+    if (name === 'toggle') spController.togglePlay();
+  }
+  setTimeout(updateMiniPlayer, 120);
+}
+
+function mediaSeek(fraction) {
+  const status = mediaStatus();
+  if (!status.ok || !status.duration) return;
+  const target = Math.max(0, Math.min(status.duration, fraction * status.duration));
+  if (ytPlayer) ytPlayer.seekTo(target, true);
+  else if (spController) spController.seek(target);
+  setTimeout(updateMiniPlayer, 120);
 }
 
 let ambMode = 'off', ambNodes = null, ambTimer = null;
@@ -2540,9 +2754,29 @@ $('toggle-durations').onclick = () => {
   buildCalendar();
 };
 
+$('mini-play').onclick = () => mediaCommand('toggle');
+$('mini-next').onclick = () => mediaCommand('next');
+$('mini-prev').onclick = () => mediaCommand('prev');
+$('mini-close').onclick = () => { miniDismissed = true; updateMiniPlayer(); };
+$('mini-track').onclick = (e) => {
+  const box = e.currentTarget.getBoundingClientRect();
+  mediaSeek((e.clientX - box.left) / box.width);
+};
+$('music-popout').onclick = () => {
+  miniDismissed = false;
+  mediaEverPlayed = true;   // the button is an explicit request to see the bar
+  updateMiniPlayer();
+  closeHistory();
+};
+
+// The bar polls, because neither player pushes a position update every second.
+setInterval(() => {
+  if (mountedKey) updateMiniPlayer();
+}, 500);
+
 $('music-save').onclick = () => {
   const raw = $('music-url').value;
-  if (raw.trim() && !embedUrl(raw)) {
+  if (raw.trim() && !parseMedia(raw)) {
     $('music-error').textContent = "That doesn't look like a YouTube or Spotify link.";
     return;
   }
