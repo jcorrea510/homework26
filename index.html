@@ -507,7 +507,9 @@ function darken(hex, amount) {
 function colorFor(cls) {
   const name = String(cls || '');
   let base;
-  if (SUBJECT_COLORS[name]) base = SUBJECT_COLORS[name];
+  const custom = settings.courseColors && settings.courseColors[name];
+  if (custom) base = custom;
+  else if (SUBJECT_COLORS[name]) base = SUBJECT_COLORS[name];
   else if (!name.trim()) base = "#8b95ab";
   else {
     let h = 0;
@@ -592,7 +594,8 @@ const DEFAULT_SETTINGS = {
   chime: true,
   autoAdd: true,
   showDurations: false,
-  musicUrl: ''
+  musicUrl: '',
+  courseColors: {}
 };
 let settings = { ...DEFAULT_SETTINGS };
 let themeIsLight = false;
@@ -1850,7 +1853,7 @@ function calendarRow(t) {
             style="border:2px solid ${t.isTonight ? 'var(--accent)' : 'var(--edge)'};background:${t.isTonight ? 'var(--accent)' : 'transparent'};color:var(--on-accent)">
       ${t.isTonight ? CHECK_SVG : ''}
     </button>
-    <span class="flex-1 min-w-0 break-words ${t.done ? 'line-through' : ''}">${escapeHtml(t.name)}</span>
+    <span class="flex-1 min-w-0 break-words ${t.done ? 'line-through' : ''}" style="color:${colorFor(t.cls)}">${escapeHtml(t.name)}</span>
     <button class="done-btn shrink-0 w-4 h-4 rounded-full flex items-center justify-center"
             title="Mark done"
             style="border:2px solid ${t.done ? 'var(--good)' : 'var(--edge)'};background:${t.done ? 'var(--good)' : 'transparent'};color:var(--on-good)">
@@ -1859,7 +1862,7 @@ function calendarRow(t) {
     <button class="delete-btn shrink-0 leading-none px-0.5" title="Delete" style="color:var(--muted)">&times;</button>
     </div>
     ${settings.showDurations ? `
-    <div class="flex items-center justify-end gap-1 px-2 pb-1.5">
+    <div class="flex items-center justify-center gap-1 px-2 pb-1.5">
       <span class="flex items-center rounded-md" style="border:1px solid var(--line)">
         <button class="cal-minus px-1" title="Less time">${CARET_DOWN}</button>
         <span class="cal-mins countdown w-6 text-center" style="color:var(--muted)">${Number(t.time) || DEFAULT_MINUTES}</span>
@@ -2064,7 +2067,11 @@ let courseDraft = [];
 
 function openCourseEditor() {
   if (!requireLogin('edit your courses')) return;
-  courseDraft = classList.map(name => ({ name, original: name }));
+  courseDraft = classList.map(name => ({
+    name,
+    original: name,
+    color: (settings.courseColors && settings.courseColors[name]) || null
+  }));
   $('courses-error').textContent = '';
   renderCourseRows();
   $('courses-modal').classList.remove('hidden');
@@ -2075,10 +2082,13 @@ function renderCourseRows(focusLast = false) {
   wrap.innerHTML = '';
 
   courseDraft.forEach((course, i) => {
+    const holder = document.createElement('div');
+
     const row = document.createElement('div');
     row.className = 'flex items-center gap-2';
     row.innerHTML = `
-      <span class="shrink-0 w-2.5 h-2.5 rounded-full js-dot" style="background:${colorFor(course.name)}"></span>
+      <button class="js-dot shrink-0 w-4 h-4 rounded-full" title="Change colour"
+              style="background:${course.color || colorFor(course.name)};border:2px solid var(--line)"></button>
       <input class="field flex-1 min-w-0 px-2 py-1.5 text-sm js-name" placeholder="Course name" value="${escapeHtml(course.name)}">
       <button class="js-up shrink-0 w-7 h-7 rounded text-xs disabled:opacity-25" title="Move up"
               style="background:var(--panel-2);border:1px solid var(--line)" ${i === 0 ? 'disabled' : ''}>&#8593;</button>
@@ -2091,8 +2101,38 @@ function renderCourseRows(focusLast = false) {
     const dot = row.querySelector('.js-dot');
     input.addEventListener('input', (e) => {
       course.name = e.target.value;
-      dot.style.background = colorFor(course.name);
+      if (!course.color) dot.style.background = colorFor(course.name);
     });
+
+    // Swatches live in the row, so opening one doesn't rebuild the list and
+    // steal focus from a name you're halfway through typing.
+    const picker = document.createElement('div');
+    picker.className = 'grid grid-cols-6 gap-1.5 mt-2 mb-1 ml-6 mr-1';
+    picker.style.display = 'none';
+    PALETTE.forEach(hex => {
+      const swatch = document.createElement('button');
+      swatch.className = 'h-6 rounded-md';
+      swatch.style.cssText = `background:${hex};border:2px solid ${course.color === hex ? 'var(--text)' : 'transparent'}`;
+      swatch.onclick = () => {
+        course.color = hex;
+        dot.style.background = hex;
+        picker.querySelectorAll('button').forEach(b => { b.style.borderColor = 'transparent'; });
+        swatch.style.borderColor = 'var(--text)';
+      };
+      picker.appendChild(swatch);
+    });
+    const reset = document.createElement('button');
+    reset.className = 'col-span-6 text-xs hover:underline mt-0.5 text-left';
+    reset.style.color = 'var(--muted)';
+    reset.textContent = 'Use the automatic colour';
+    reset.onclick = () => {
+      course.color = null;
+      dot.style.background = colorFor(course.name);
+      picker.querySelectorAll('button').forEach(b => { b.style.borderColor = 'transparent'; });
+    };
+    picker.appendChild(reset);
+
+    dot.onclick = () => { picker.style.display = picker.style.display === 'none' ? 'grid' : 'none'; };
     row.querySelector('.js-up').addEventListener('click', () => {
       [courseDraft[i - 1], courseDraft[i]] = [courseDraft[i], courseDraft[i - 1]];
       renderCourseRows();
@@ -2106,7 +2146,8 @@ function renderCourseRows(focusLast = false) {
       renderCourseRows();
     });
 
-    wrap.appendChild(row);
+    holder.append(row, picker);
+    wrap.appendChild(holder);
   });
 
   if (focusLast) {
@@ -2128,12 +2169,24 @@ async function saveCourses() {
     .filter(c => c.original && c.name.trim() && c.name.trim() !== c.original)
     .map(c => ({ from: c.original, to: c.name.trim() }));
 
+  const courseColors = { ...(settings.courseColors || {}) };
+  courseDraft.forEach(c => {
+    const name = c.name.trim();
+    if (name) courseColors[name] = c.color || null;   // null means fall back to automatic
+  });
+
   $('courses-modal').classList.add('hidden');
   classList = names;          // optimistic, so the planner updates immediately
+  settings = { ...settings, courseColors };
+  tonightSignature = null;
+  scheduleSignature = null;
+  renderTonight();
   buildCalendar();
+  renderSchedule();
 
   try {
-    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/settings`), { classes: names }, { merge: true });
+    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/settings`),
+                 { classes: names, courseColors }, { merge: true });
 
     if (renames.length) {
       const batch = writeBatch(db);
