@@ -101,6 +101,13 @@
   .bar > div { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s linear; }
   .bar.over > div { background: var(--warn); }
 
+  .no-spin {
+    -moz-appearance: textfield; appearance: textfield;
+    background: transparent; border: none; color: var(--text); padding: 0;
+  }
+  .no-spin::-webkit-outer-spin-button, .no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
   .countdown { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
   /* Feedback on press */
@@ -143,6 +150,8 @@
     border-radius: 9px; color: var(--muted); background: transparent;
   }
   .drawer-tab.active { background: var(--panel-2); color: var(--text); }
+  /* Inactive tabs stay rendered so an embedded player keeps going. */
+  [data-panel].panel-off { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
 
   .swatch { width: 100%; height: 34px; border-radius: 9px; border: 2px solid var(--line); position: relative; }
   .swatch.active { border-color: var(--accent); }
@@ -305,7 +314,7 @@
     <button class="drawer-tab" data-tab="settings">Settings</button>
   </div>
 
-  <div class="flex-1 overflow-y-auto px-5 pb-8">
+  <div class="flex-1 overflow-y-auto px-5 pb-8 relative">
 
     <!-- History -->
     <div data-panel="history">
@@ -314,13 +323,13 @@
     </div>
 
     <!-- Upcoming -->
-    <div data-panel="upcoming" class="hidden">
+    <div data-panel="upcoming" class="panel-off">
       <p class="text-xs mb-3" style="color:var(--muted)">Everything unfinished that isn't already on tonight's list.</p>
       <div id="upcoming-body" class="space-y-3"></div>
     </div>
 
     <!-- Music -->
-    <div data-panel="music" class="hidden space-y-5">
+    <div data-panel="music" class="panel-off space-y-5">
       <div>
         <h3 class="text-sm font-semibold mb-1">Your playlist</h3>
         <p class="text-xs mb-2" style="color:var(--muted)">Paste a YouTube or Spotify link and it stays here.</p>
@@ -343,7 +352,7 @@
     </div>
 
     <!-- Settings -->
-    <div data-panel="settings" class="hidden space-y-5">
+    <div data-panel="settings" class="panel-off space-y-5">
       <div>
         <h3 class="text-sm font-semibold mb-2">Theme</h3>
         <div id="theme-grid" class="grid grid-cols-3 gap-2"></div>
@@ -972,7 +981,7 @@ const DRAWER_TITLES = { history: 'History', upcoming: 'Upcoming', music: 'Music'
 function showDrawerTab(name) {
   currentDrawerTab = name;
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== name));
+  document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('panel-off', p.dataset.panel !== name));
   $('drawer-title').textContent = DRAWER_TITLES[name];
   if (name === 'history') renderHistory();
   if (name === 'upcoming') renderUpcoming();
@@ -1123,19 +1132,27 @@ function embedUrl(raw) {
   return null;
 }
 
+let currentEmbedSrc = null;
+
 function renderMusicPanel() {
-  $('music-url').value = settings.musicUrl || '';
+  if (document.activeElement !== $('music-url')) $('music-url').value = settings.musicUrl || '';
   $('music-error').textContent = '';
   const frame = $('music-frame');
-  frame.innerHTML = '';
   const embed = embedUrl(settings.musicUrl);
-  if (embed) {
-    const iframe = document.createElement('iframe');
-    iframe.src = embed.src;
-    iframe.height = embed.height;
-    iframe.allow = 'autoplay; encrypted-media; clipboard-write; picture-in-picture';
-    iframe.loading = 'lazy';
-    frame.appendChild(iframe);
+
+  // Rebuilding the iframe restarts the player, so only touch it when the
+  // link itself changed.
+  const src = embed ? embed.src : null;
+  if (src !== currentEmbedSrc) {
+    currentEmbedSrc = src;
+    frame.innerHTML = '';
+    if (embed) {
+      const iframe = document.createElement('iframe');
+      iframe.src = embed.src;
+      iframe.height = embed.height;
+      iframe.allow = 'autoplay; encrypted-media; clipboard-write; picture-in-picture';
+      frame.appendChild(iframe);
+    }
   }
   document.querySelectorAll('.amb-btn').forEach(b => b.classList.toggle('on', b.dataset.amb === ambMode));
 }
@@ -1427,9 +1444,13 @@ function tonightRow(t) {
     </span>
     ${took != null
       ? `<span class="text-xs shrink-0 countdown" style="color:${took > planned ? 'var(--warn)' : 'var(--muted)'}">${planned}&rarr;${took} min</span>`
-      : `<input type="number" min="1" step="1" value="${planned}"
-                aria-label="Minutes for ${escapeHtml(t.name)}"
-                class="field w-14 px-1 py-1 text-xs text-center shrink-0">
+      : `<span class="flex items-center shrink-0 rounded-md" style="border:1px solid var(--line)">
+           <button class="t-minus px-1 py-1" title="Less time">${CARET_DOWN}</button>
+           <input type="number" inputmode="numeric" value="${planned}"
+                  aria-label="Minutes for ${escapeHtml(t.name)}"
+                  class="no-spin w-8 text-xs text-center countdown">
+           <button class="t-plus px-1 py-1" title="More time">${CARET_UP}</button>
+         </span>
          <span class="text-xs shrink-0" style="color:var(--muted)">min</span>`}
     <button class="remove-btn shrink-0 text-lg leading-none px-1" title="Remove from tonight" style="color:var(--muted)">&times;</button>
   `;
@@ -1437,6 +1458,11 @@ function tonightRow(t) {
   const doneBtn = li.querySelector('.done-btn');
   doneBtn.addEventListener('click', () => { doneBtn.classList.add('pop'); setTaskDone(t.id, !t.done); });
   li.querySelector('.remove-btn').addEventListener('click', () => updateTaskInDb(t.id, { isTonight: false }));
+  const minus = li.querySelector('.t-minus');
+  if (minus) {
+    minus.addEventListener('click', () => stepTask(t.id, -1));
+    li.querySelector('.t-plus').addEventListener('click', () => stepTask(t.id, 1));
+  }
   const minutes = li.querySelector('input[type="number"]');
   if (minutes) minutes.addEventListener('change', (e) => {
     const v = Math.max(1, parseInt(e.target.value, 10) || settings.defaultMinutes);
@@ -1813,29 +1839,34 @@ function buildCalendar() {
 function calendarRow(t) {
   const li = document.createElement('li');
   li.dataset.id = t.id;
-  li.className = 'flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs';
+  li.className = 'rounded-lg text-xs';
   li.style.background = 'var(--panel-2)';
   if (t.done) li.style.opacity = '.5';
 
   li.innerHTML = `
+    <div class="flex items-center gap-2 px-2 py-1.5">
     <button class="tonight-btn shrink-0 w-4 h-4 rounded flex items-center justify-center"
             title="${t.isTonight ? "Remove from tonight" : "Add to tonight"}"
             style="border:2px solid ${t.isTonight ? 'var(--accent)' : 'var(--edge)'};background:${t.isTonight ? 'var(--accent)' : 'transparent'};color:var(--on-accent)">
       ${t.isTonight ? CHECK_SVG : ''}
     </button>
     <span class="flex-1 min-w-0 break-words ${t.done ? 'line-through' : ''}">${escapeHtml(t.name)}</span>
-    ${settings.showDurations ? `
-      <span class="flex items-center shrink-0 rounded-md" style="border:1px solid var(--line)">
-        <button class="cal-minus px-1 py-0.5" title="Less time">${CARET_DOWN}</button>
-        <span class="cal-mins text-xs countdown w-8 text-center" style="color:var(--muted)">${Number(t.time) || DEFAULT_MINUTES}</span>
-        <button class="cal-plus px-1 py-0.5" title="More time">${CARET_UP}</button>
-      </span>` : ''}
     <button class="done-btn shrink-0 w-4 h-4 rounded-full flex items-center justify-center"
             title="Mark done"
             style="border:2px solid ${t.done ? 'var(--good)' : 'var(--edge)'};background:${t.done ? 'var(--good)' : 'transparent'};color:var(--on-good)">
       ${t.done ? CHECK_SVG : ''}
     </button>
     <button class="delete-btn shrink-0 leading-none px-0.5" title="Delete" style="color:var(--muted)">&times;</button>
+    </div>
+    ${settings.showDurations ? `
+    <div class="flex items-center justify-end gap-1 px-2 pb-1.5">
+      <span class="flex items-center rounded-md" style="border:1px solid var(--line)">
+        <button class="cal-minus px-1" title="Less time">${CARET_DOWN}</button>
+        <span class="cal-mins countdown w-6 text-center" style="color:var(--muted)">${Number(t.time) || DEFAULT_MINUTES}</span>
+        <button class="cal-plus px-1" title="More time">${CARET_UP}</button>
+      </span>
+      <span style="color:var(--muted)">min</span>
+    </div>` : ''}
   `;
 
   li.querySelector('.tonight-btn').addEventListener('click', () => {
