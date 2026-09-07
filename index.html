@@ -155,9 +155,17 @@
 
   /* Drawer tabs */
   .drawer-tab {
-    flex: 1; padding: .55rem 0; font-size: .75rem; font-weight: 600;
-    border-radius: 9px; color: var(--muted); background: transparent;
+    flex: 1; padding: .55rem .15rem; font-size: .7rem; font-weight: 600;
+    border-radius: 9px; color: var(--muted); background: transparent; white-space: nowrap;
   }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: .35rem;
+    padding: .3rem .55rem; border-radius: 8px; font-size: .75rem;
+    background: var(--panel-2); border: 1px solid var(--line);
+  }
+  .chip.assumed { border-style: dashed; }
+  .chip b { font-weight: 600; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .drawer-tab.active { background: var(--panel-2); color: var(--text); }
   /* Inactive tabs stay rendered so an embedded player keeps going. */
   [data-panel].panel-off { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
@@ -359,6 +367,7 @@
     <button id="history-close" class="text-2xl leading-none px-1" style="color:var(--muted)">&times;</button>
   </div>
   <div class="flex gap-1 mx-5 mb-4 p-1 rounded-xl" style="background:var(--panel-2)">
+    <button class="drawer-tab" data-tab="add">Add</button>
     <button class="drawer-tab active" data-tab="history">History</button>
     <button class="drawer-tab" data-tab="upcoming">Upcoming</button>
     <button class="drawer-tab" data-tab="music">Music</button>
@@ -366,6 +375,23 @@
   </div>
 
   <div class="flex-1 overflow-y-auto px-5 pb-8 relative">
+
+    <!-- Add -->
+    <div data-panel="add" class="panel-off">
+      <p class="text-xs mb-2" style="color:var(--muted)">Type it the way you'd say it. Enter to run.</p>
+      <input id="cmd-input" class="field w-full px-3 py-2.5 text-sm" placeholder="worksheet due thursday 30min math" autocomplete="off">
+      <div id="cmd-preview" class="mt-3"></div>
+      <button id="cmd-run" class="w-full mt-3 px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent);color:var(--on-accent)">Add</button>
+      <div class="mt-6 pt-4 text-xs space-y-1.5" style="border-top:1px solid var(--line);color:var(--muted)">
+        <div class="font-semibold mb-1" style="color:var(--text)">It understands</div>
+        <div class="mono">essay due friday 45min english</div>
+        <div class="mono">cs lab 1h tomorrow tonight</div>
+        <div class="mono">read ch 4 sep 12 math</div>
+        <div class="mono">done math worksheet</div>
+        <div class="mono">tonight spanish essay</div>
+        <div class="mono">start 7:30pm</div>
+      </div>
+    </div>
 
     <!-- History -->
     <div data-panel="history">
@@ -643,7 +669,7 @@ function suggestMinutes(cls) {
     const samples = [];
     Object.values(historyCache).forEach(day =>
       Object.values(day.entries || {}).forEach(e => {
-        if (e.cls === cls && e.actualMs != null) samples.push(e.actualMs / 60000);
+        if (e.cls === cls && e.actualMs != null && !e.estimated) samples.push(e.actualMs / 60000);
       }));
     if (samples.length >= 3) {
       samples.sort((a, b) => a - b);
@@ -721,7 +747,7 @@ let db = null, auth = null;
 let userId = null;
 let tasksCache = {};
 let scheduleMeta = { startAt: null, shiftMs: 0, breakStartedAt: null, completions: {} };
-let weekStart = getStartOfWeek(new Date());
+let weekStart = defaultWeekStart();
 let unsubscribeTasks = null, unsubscribeSchedule = null, unsubscribeSettings = null, unsubscribeHistory = null;
 let historyCache = {};        // 'YYYY-MM-DD' -> { entries: { taskId: entry } }
 let historyIndex = {};        // taskId -> actualMs, for the planned/actual badges
@@ -759,6 +785,15 @@ function getStartOfWeek(date) {
   const diff = (day === 0 ? -6 : 1) - day;     // back to Monday
   d.setDate(d.getDate() + diff);
   return d;
+}
+
+/**
+ * On a weekend the current Mon-Fri is already over, and the work that just
+ * landed on tonight's list is due Monday, so open that week instead.
+ */
+function defaultWeekStart(date = new Date()) {
+  const day = date.getDay();
+  return getStartOfWeek((day === 0 || day === 6) ? getNextSchoolDay(date) : date);
 }
 
 function addDays(date, n) {
@@ -818,7 +853,8 @@ function prettyDay(key) {
 function actualMinutes(taskId) {
   const c = scheduleMeta.completions?.[taskId];
   if (c && c.startedAt != null && c.endedAt != null) return Math.max(0, Math.round((c.endedAt - c.startedAt) / 60000));
-  if (historyIndex[taskId] != null) return Math.max(0, Math.round(historyIndex[taskId] / 60000));
+  const e = historyIndex[taskId];
+  if (e && !e.estimated && e.actualMs != null) return Math.max(0, Math.round(e.actualMs / 60000));
   return null;
 }
 
@@ -1046,13 +1082,14 @@ function renderHistory() {
 
   wrap.innerHTML = '';
   if (!days.length) {
-    wrap.innerHTML = `<p class="text-sm" style="color:var(--muted)">Finish a task while the schedule is running and the day shows up here, with how long each one really took.</p>`;
+    wrap.innerHTML = `<p class="text-sm" style="color:var(--muted)">Check anything off and the day shows up here. Run the schedule while you work and it logs the real time instead of your estimate.</p>`;
     return;
   }
 
   days.forEach(key => {
     const entries = Object.values(historyCache[key].entries).sort((a, b) => (a.endedAt || 0) - (b.endedAt || 0));
     const totalMin = Math.round(entries.reduce((a, c) => a + (c.actualMs || 0), 0) / 60000);
+    const anyEstimated = entries.some(e => e.estimated);
 
     const det = document.createElement('details');
     det.className = 'rounded-xl p-3';
@@ -1061,19 +1098,20 @@ function renderHistory() {
     det.innerHTML = `
       <summary class="cursor-pointer text-sm font-semibold flex justify-between items-baseline gap-3">
         <span>${prettyDay(key)}</span>
-        <span class="text-xs shrink-0" style="color:var(--muted);font-weight:500">${fmtMinutes(totalMin)} &middot; ${entries.length} task${entries.length === 1 ? '' : 's'}</span>
+        <span class="text-xs shrink-0" style="color:var(--muted);font-weight:500">${anyEstimated ? '~' : ''}${fmtMinutes(totalMin)} &middot; ${entries.length} task${entries.length === 1 ? '' : 's'}</span>
       </summary>`;
 
     const ul = document.createElement('ul');
     ul.className = 'mt-3 space-y-1.5';
     entries.forEach(e => {
       const actual = Math.round((e.actualMs || 0) / 60000);
-      const over = actual > (e.plannedMin || 0);
+      const over = !e.estimated && actual > (e.plannedMin || 0);
       const li = document.createElement('li');
       li.className = 'text-xs flex justify-between items-baseline gap-3';
       li.innerHTML = `
         <span class="min-w-0"><span class="font-semibold" style="color:${colorFor(e.cls)}">${escapeHtml(e.cls)}</span> ${escapeHtml(e.name)}</span>
-        <span class="shrink-0 countdown" style="color:${over ? 'var(--warn)' : 'var(--muted)'}">${e.plannedMin}&rarr;${actual}m</span>`;
+        <span class="shrink-0 countdown" style="color:${over ? 'var(--warn)' : 'var(--muted)'}">${
+          e.estimated ? `${actual}m est` : `${e.plannedMin}&rarr;${actual}m`}</span>`;
       ul.appendChild(li);
     });
     det.appendChild(ul);
@@ -1082,13 +1120,14 @@ function renderHistory() {
 }
 
 let currentDrawerTab = 'history';
-const DRAWER_TITLES = { history: 'History', upcoming: 'Upcoming', music: 'Music', settings: 'Settings' };
+const DRAWER_TITLES = { add: 'Add', history: 'History', upcoming: 'Upcoming', music: 'Music', settings: 'Settings' };
 
 function showDrawerTab(name) {
   currentDrawerTab = name;
   document.querySelectorAll('.drawer-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('panel-off', p.dataset.panel !== name));
   $('drawer-title').textContent = DRAWER_TITLES[name];
+  if (name === 'add') { renderCmdPreview(); setTimeout(() => $('cmd-input').focus(), 60); }
   if (name === 'history') renderHistory();
   if (name === 'upcoming') renderUpcoming();
   if (name === 'settings') renderSettingsPanel();
@@ -1134,6 +1173,261 @@ function syncPinButton() {
   hint.textContent = settings.pinned
     ? 'The page sits beside the sidebar, so your video and your schedule are both on screen.'
     : '';
+}
+
+/* ------------------------------------------------------------------ *
+ * Quick add
+ *
+ * A deterministic parser rather than a model: the grammar is small, and this
+ * runs offline, instantly, with no API key sitting in a file everyone can read.
+ * ------------------------------------------------------------------ */
+
+const escapeRegex = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const WEEKDAYS = {
+  sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2,
+  wed: 3, weds: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4,
+  fri: 5, friday: 5, sat: 6, saturday: 6
+};
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11 };
+
+function midnight(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+
+/** Pulls a duration out of the text. Requires a unit, so "chapter 3" stays a title. */
+function takeDuration(text) {
+  let minutes = null, cut = text;
+  const hm = text.match(/\b(\d{1,2})\s*(?:h|hr|hrs|hour|hours)\s*(\d{1,2})?\s*(?:m|min|mins|minute|minutes)?\b/i);
+  if (hm) {
+    minutes = parseInt(hm[1], 10) * 60 + (hm[2] ? parseInt(hm[2], 10) : 0);
+    cut = text.replace(hm[0], ' ');
+  } else {
+    const m = text.match(/\b(\d{1,3})\s*(?:m|min|mins|minute|minutes)\b/i);
+    if (m) { minutes = parseInt(m[1], 10); cut = text.replace(m[0], ' '); }
+  }
+  return { minutes, text: cut };
+}
+
+/** Pulls a due date out of the text. Returns null date if nothing date-like appears. */
+function takeDate(text) {
+  const today = midnight(new Date());
+  const tryMatch = (re, build) => {
+    const m = text.match(re);
+    if (!m) return null;
+    const date = build(m);
+    return date ? { date, text: text.replace(m[0], ' ') } : null;
+  };
+
+  return tryMatch(/\bday after tomorrow\b/i, () => addDays(today, 2))
+    || tryMatch(/\b(tomorrow|tmr|tmrw)\b/i, () => addDays(today, 1))
+    || tryMatch(/\btoday\b/i, () => today)
+    || tryMatch(/\bin\s+(\d{1,2})\s+days?\b/i, m => addDays(today, parseInt(m[1], 10)))
+    || tryMatch(/\b(next\s+)?(sunday|saturday|thursday|wednesday|tuesday|monday|friday|sun|sat|thurs|thur|thu|weds|wed|tues|tue|mon|fri)\b/i, m => {
+      const target = WEEKDAYS[m[2].toLowerCase()];
+      let ahead = (target - today.getDay() + 7) % 7;
+      if (ahead === 0) ahead = 7;                       // "thursday" on a Thursday means the next one
+      if (m[1] && ahead < 7) ahead += 7;                // "next thursday" is a week further out
+      return addDays(today, ahead);
+    })
+    || tryMatch(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/, m => {
+      let year = m[3] ? parseInt(m[3], 10) : today.getFullYear();
+      if (year < 100) year += 2000;
+      let d = new Date(year, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+      if (!m[3] && d < addDays(today, -180)) d = new Date(year + 1, d.getMonth(), d.getDate());
+      return isNaN(d.getTime()) ? null : midnight(d);
+    })
+    || tryMatch(/\b(jan|feb|mar|apr|may|jun|jul|aug|sept|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/i, m => {
+      let d = new Date(today.getFullYear(), MONTHS[m[1].toLowerCase()], parseInt(m[2], 10));
+      if (d < addDays(today, -180)) d = new Date(today.getFullYear() + 1, d.getMonth(), d.getDate());
+      return isNaN(d.getTime()) ? null : midnight(d);
+    })
+    || { date: null, text };
+}
+
+/** Matches a course by full name, acronym, or a prefix of at least three letters. */
+function takeCourse(text) {
+  const aliases = [];
+  classList.forEach(course => {
+    const lower = course.toLowerCase();
+    const parts = lower.split(/\s+/);
+    aliases.push({ course, alias: lower });
+    if (parts.length > 1) {
+      aliases.push({ course, alias: parts.join('') });
+      aliases.push({ course, alias: parts.map(p => p[0]).join('') });
+    } else {
+      for (let n = 3; n < lower.length; n++) aliases.push({ course, alias: lower.slice(0, n) });
+    }
+  });
+
+  const hits = [];
+  aliases.forEach(({ course, alias }) => {
+    const re = new RegExp(`\\b${escapeRegex(alias)}\\b`, 'i');
+    const m = text.match(re);
+    if (m) hits.push({ course, alias, matched: m[0], length: alias.length });
+  });
+
+  if (!hits.length) return { course: null, text, ambiguous: false };
+  const best = hits.sort((a, b) => b.length - a.length)[0];
+  const tied = hits.filter(h => h.length === best.length && h.course !== best.course);
+  if (tied.length) return { course: null, text, ambiguous: [best.course, ...tied.map(t => t.course)] };
+  return { course: best.course, text: text.replace(new RegExp(`\\b${escapeRegex(best.matched)}\\b`, 'i'), ' '), ambiguous: false };
+}
+
+const FILLERS = /\b(add|new|a|an|the|due|by|for|on|at|assignment|hw|homework)\b/gi;
+const cleanTitle = (text) => text.replace(FILLERS, ' ').replace(/\s+/g, ' ').trim();
+
+function findTasks(query, filter) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return Object.values(tasksCache).filter(filter).filter(t => {
+    const hay = `${t.cls} ${t.name}`.toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+}
+
+function parseTime(text) {
+  const t = text.trim();
+  if (!t || /^now$/i.test(t)) return new Date();
+  const m = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!m) return null;
+  let hour = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const ampm = m[3] ? m[3].toLowerCase() : null;
+  if (ampm === 'pm' && hour < 12) hour += 12;
+  if (ampm === 'am' && hour === 12) hour = 0;
+  if (hour > 23 || min > 59) return null;
+  const d = new Date();
+  d.setHours(hour, min, 0, 0);
+  return d;
+}
+
+function parseCommand(raw) {
+  const text = (raw || '').trim();
+  if (!text) return { kind: 'empty', errors: [] };
+
+  const verb = text.match(/^(add|new|done|finish|complete|tonight|start)\b/i);
+  const word = verb ? verb[1].toLowerCase() : 'add';
+  const rest = verb ? text.slice(verb[1].length).trim() : text;
+
+  if (['done', 'finish', 'complete'].includes(word)) {
+    const matches = findTasks(rest, t => !t.done);
+    if (!rest) return { kind: 'done', errors: ['Say which task, like "done math worksheet".'] };
+    if (!matches.length) return { kind: 'done', errors: [`Nothing unfinished matches "${rest}".`] };
+    if (matches.length > 1) return { kind: 'done', errors: [`That matches ${matches.length} tasks: ${matches.slice(0, 3).map(t => t.name).join(', ')}${matches.length > 3 ? '…' : ''}. Add a word to narrow it.`] };
+    return { kind: 'done', task: matches[0], errors: [] };
+  }
+
+  if (word === 'tonight') {
+    const matches = findTasks(rest, t => !t.done && !t.isTonight);
+    if (!rest) return { kind: 'tonight', errors: ['Say which task, like "tonight spanish essay".'] };
+    if (!matches.length) return { kind: 'tonight', errors: [`Nothing matches "${rest}" that isn't already on tonight's list.`] };
+    if (matches.length > 1) return { kind: 'tonight', errors: [`That matches ${matches.length} tasks: ${matches.slice(0, 3).map(t => t.name).join(', ')}${matches.length > 3 ? '…' : ''}. Add a word to narrow it.`] };
+    return { kind: 'tonight', task: matches[0], errors: [] };
+  }
+
+  if (word === 'start') {
+    const when = parseTime(rest);
+    if (!when) return { kind: 'start', errors: [`Couldn't read "${rest}" as a time. Try "start 7:30pm" or "start now".`] };
+    if (!tonightTasks().length) return { kind: 'start', errors: ["Tonight's list is empty, so there's nothing to schedule."] };
+    return { kind: 'start', when, errors: [] };
+  }
+
+  // add
+  let work = ` ${rest} `;
+  let forceTonight = false;
+  if (/\btonight\b/i.test(work)) { forceTonight = true; work = work.replace(/\btonight\b/i, ' '); }
+
+  const dur = takeDuration(work); work = dur.text;
+  const dt = takeDate(work); work = dt.text;
+  const cr = takeCourse(work); work = cr.text;
+
+  const title = cleanTitle(work);
+  const errors = [];
+  if (cr.ambiguous) errors.push(`"${rest.trim()}" could mean ${cr.ambiguous.join(' or ')}. Spell the course out.`);
+  else if (!cr.course) errors.push('No course recognised. Add one of: ' + classList.join(', ') + '.');
+  if (!title) errors.push('No title left over. Say what the assignment is.');
+
+  const assumedDate = !dt.date;
+  const date = dt.date || midnight(getNextSchoolDay(new Date()));
+  const assumedMinutes = dur.minutes == null;
+  const minutes = dur.minutes != null ? Math.max(1, dur.minutes) : (cr.course ? suggestMinutes(cr.course) : settings.defaultMinutes);
+
+  return {
+    kind: 'add', errors, title, course: cr.course, date, minutes,
+    assumedDate, assumedMinutes, forceTonight
+  };
+}
+
+function renderCmdPreview() {
+  const parsed = parseCommand($('cmd-input').value);
+  const box = $('cmd-preview');
+  const run = $('cmd-run');
+  const labels = { add: 'Add', done: 'Mark done', tonight: 'Add to tonight', start: 'Start schedule', empty: 'Add' };
+  run.textContent = labels[parsed.kind] || 'Add';
+
+  const ok = parsed.kind !== 'empty' && !parsed.errors.length;
+  run.disabled = !ok;
+  run.style.opacity = ok ? '1' : '.4';
+
+  if (parsed.kind === 'empty') { box.innerHTML = ''; return; }
+
+  if (parsed.errors.length) {
+    box.innerHTML = parsed.errors.map(e =>
+      `<p class="text-xs" style="color:var(--danger)">${escapeHtml(e)}</p>`).join('');
+    return;
+  }
+
+  if (parsed.kind === 'done' || parsed.kind === 'tonight') {
+    box.innerHTML = `<span class="chip"><span style="color:${colorFor(parsed.task.cls)}"><b>${escapeHtml(parsed.task.cls)}</b></span> ${escapeHtml(parsed.task.name)}</span>`;
+    return;
+  }
+  if (parsed.kind === 'start') {
+    box.innerHTML = `<span class="chip"><b>${fmtClock(parsed.when.getTime())}</b> · ${tonightTasks().length} task${tonightTasks().length === 1 ? '' : 's'}</span>`;
+    return;
+  }
+
+  const dueLabel = parsed.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  box.innerHTML = `
+    <div class="flex flex-wrap gap-1.5">
+      <span class="chip"><span style="color:${colorFor(parsed.course)}"><b>${escapeHtml(parsed.course)}</b></span></span>
+      <span class="chip">${escapeHtml(parsed.title)}</span>
+      <span class="chip ${parsed.assumedDate ? 'assumed' : ''}"><span style="color:var(--muted)">due</span> ${dueLabel}</span>
+      <span class="chip ${parsed.assumedMinutes ? 'assumed' : ''}">${parsed.minutes} min</span>
+      ${parsed.forceTonight ? `<span class="chip" style="border-color:var(--accent)">tonight</span>` : ''}
+    </div>
+    ${(parsed.assumedDate || parsed.assumedMinutes)
+      ? `<p class="text-xs mt-2" style="color:var(--muted)">Dashed chips are assumed — say a date or a length to set them.</p>` : ''}`;
+}
+
+function runCommand() {
+  const parsed = parseCommand($('cmd-input').value);
+  if (parsed.kind === 'empty' || parsed.errors.length) return;
+
+  if (parsed.kind === 'done') {
+    setTaskDone(parsed.task.id, true);
+    showToast(`Marked "${parsed.task.name}" done.`);
+  } else if (parsed.kind === 'tonight') {
+    updateTaskInDb(parsed.task.id, { isTonight: true, orderIndex: Date.now() });
+    showToast(`Added "${parsed.task.name}" to tonight.`);
+  } else if (parsed.kind === 'start') {
+    startScheduleAt(parsed.when.getTime());
+    showToast(`Schedule starts at ${fmtClock(parsed.when.getTime())}.`);
+  } else {
+    const nextSchoolDay = getNextSchoolDay(new Date()).toDateString();
+    const dateStr = parsed.date.toDateString();
+    addTaskToDb({
+      id: crypto.randomUUID(),
+      name: parsed.title,
+      cls: parsed.course,
+      time: parsed.minutes,
+      done: false,
+      isTonight: parsed.forceTonight || dateStr === nextSchoolDay,
+      date: dateStr,
+      orderIndex: Date.now()
+    });
+    showToast(`Added "${parsed.title}" to ${parsed.course}.`);
+  }
+
+  $('cmd-input').value = '';
+  renderCmdPreview();
 }
 
 /* ------------------------------------------------------------------ *
@@ -1664,15 +1958,17 @@ function startSchedule() {
     return;
   }
   const value = $('schedule-start-time-input').value;
-  let startAt;
+  let startAt = Date.now();
   if (value) {
     const [h, m] = value.split(':').map(Number);
     const d = new Date();
     d.setHours(h, m, 0, 0);
     startAt = d.getTime();
-  } else {
-    startAt = Date.now();
   }
+  startScheduleAt(startAt);
+}
+
+function startScheduleAt(startAt) {
   saveScheduleMeta({ startAt, shiftMs: 0, breakStartedAt: null, completions: scheduleMeta.completions });
 }
 
@@ -1697,24 +1993,20 @@ function toggleBreak() {
 async function setTaskDone(taskId, done) {
   if (!requireLogin('check off tasks')) return;
   const task = tasksCache[taskId];
+  if (!task) return;
 
-  if (task && task.isTonight && scheduleMeta.startAt != null) {
-    const info = computeSchedule();
-    const row = info.rows.find(r => r.task.id === taskId);
+  // A task is "timed" only when it was on tonight's list with the schedule
+  // running. Everything else still gets logged, just with its planned length.
+  const timed = task.isTonight && scheduleMeta.startAt != null;
+  let row = null;
+
+  if (timed) {
+    row = computeSchedule().rows.find(r => r.task.id === taskId) || null;
     const completions = { ...(scheduleMeta.completions || {}) };
     const next = { ...scheduleMeta, completions };
 
     if (done) {
-      const endedAt = Date.now();
-      const startedAt = row ? row.start : endedAt;
-      completions[taskId] = { startedAt, endedAt };
-      recordHistory(taskId, {
-        name: task.name,
-        cls: task.cls,
-        plannedMin: Math.max(1, Number(task.time) || DEFAULT_MINUTES),
-        actualMs: Math.max(0, endedAt - startedAt),
-        endedAt
-      });
+      completions[taskId] = { startedAt: row ? row.start : Date.now(), endedAt: Date.now() };
       if (row && row.state === 'active') {
         // Finishing the current task re-anchors everything after it to now.
         next.shiftMs = 0;
@@ -1722,12 +2014,28 @@ async function setTaskDone(taskId, done) {
       }
     } else {
       delete completions[taskId];
-      removeHistory(taskId);
     }
     tasksCache[taskId] = { ...task, done };   // apply locally first, so the
     await saveScheduleMeta(next);             // list doesn't jump between writes
   }
 
+  if (done) {
+    const endedAt = Date.now();
+    const plannedMin = Math.max(1, Number(task.time) || settings.defaultMinutes);
+    const measured = timed && row;
+    recordHistory(taskId, {
+      name: task.name,
+      cls: task.cls,
+      plannedMin,
+      actualMs: measured ? Math.max(0, endedAt - row.start) : plannedMin * 60000,
+      estimated: !measured,
+      endedAt
+    });
+  } else {
+    removeHistory(taskId);
+  }
+
+  tasksCache[taskId] = { ...task, done };
   await updateTaskInDb(taskId, { done });
 }
 
@@ -2059,8 +2367,14 @@ function workedTodayMs(info, now) {
 
 function paintFocusExtras(info, now) {
   const stats = [];
+  if (info.finishAt) {
+    stats.push(['Done by', fmtClock(info.finishAt)]);
+    const left = info.finishAt - now;
+    stats.push(['In', left > 0 ? fmtDur(left) : 'overtime']);
+  }
   if (settings.focusWorked) stats.push(['Worked today', fmtMinutes(Math.round(workedTodayMs(info, now) / 60000))]);
   if (settings.focusClock) stats.push(['Time', fmtClock(now)]);
+  $('focus-stats').className = 'flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm mb-5';
   $('focus-stats').innerHTML = stats.map(([label, value]) =>
     `<span><span style="color:var(--muted)">${label}</span> <span class="font-semibold countdown">${value}</span></span>`).join('');
   $('focus-stats').style.display = stats.length ? 'flex' : 'none';
@@ -2649,7 +2963,7 @@ function attachListeners() {
     snap.docs.forEach(d => {
       const data = d.data() || {};
       historyCache[d.id] = { entries: data.entries || {} };
-      Object.entries(data.entries || {}).forEach(([taskId, e]) => { historyIndex[taskId] = e.actualMs; });
+      Object.entries(data.entries || {}).forEach(([taskId, e]) => { historyIndex[taskId] = e; });
     });
     if ($('history-drawer').classList.contains('open')) renderHistory();
     tonightSignature = null;
@@ -2754,7 +3068,7 @@ if (auth) {
 
 $('prev-week').onclick = () => { weekStart = addDays(weekStart, -7); buildCalendar(); };
 $('next-week').onclick = () => { weekStart = addDays(weekStart, 7); buildCalendar(); };
-$('this-week').onclick = () => { weekStart = getStartOfWeek(new Date()); buildCalendar(); };
+$('this-week').onclick = () => { weekStart = defaultWeekStart(); mobileDayIndex = null; buildCalendar(); };
 
 $('add-custom').onclick = addCustomTask;
 $('custom-task-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCustomTask(); });
@@ -2918,6 +3232,10 @@ document.querySelectorAll('[data-focussched]').forEach(btn => {
   };
 });
 
+$('cmd-input').addEventListener('input', renderCmdPreview);
+$('cmd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') runCommand(); });
+$('cmd-run').onclick = runCommand;
+
 $('music-pin').onclick = () => setPinned(!settings.pinned);
 
 $('settings-courses').onclick = () => { if (!settings.pinned) closeHistory(); openCourseEditor(); };
@@ -3034,7 +3352,13 @@ setInterval(renderSchedule, 1000);
 let lastDay = new Date().toDateString();
 setInterval(() => {
   const today = new Date().toDateString();
-  if (today !== lastDay) { lastDay = today; mobileDayIndex = null; buildCalendar(); maybeRollover(); }
+  if (today !== lastDay) {
+    lastDay = today;
+    mobileDayIndex = null;
+    weekStart = defaultWeekStart();
+    buildCalendar();
+    maybeRollover();
+  }
 }, 60000);
 </script>
 </body>
