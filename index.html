@@ -158,6 +158,43 @@
     flex: 1; padding: .55rem .15rem; font-size: .7rem; font-weight: 600;
     border-radius: 9px; color: var(--muted); background: transparent; white-space: nowrap;
   }
+  .slot {
+    position: relative; padding: .5rem .65rem .55rem .8rem; border-radius: 11px;
+    background: var(--panel-2); border: 1px solid var(--line); overflow: hidden;
+    transition: border-color .22s ease, opacity .22s ease;
+  }
+  .slot::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--edge); transition: background .25s ease, box-shadow .25s ease;
+  }
+  .slot-label {
+    font-size: .56rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    display: flex; align-items: center; gap: .32rem; color: var(--muted);
+    transition: color .22s ease;
+  }
+  .slot-mark {
+    width: 12px; height: 12px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; flex: none;
+    border: 1.5px solid currentColor; font-size: 8px; line-height: 1;
+  }
+  .slot-value {
+    font-size: .8rem; font-weight: 600; margin-top: .18rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .slot.idle { opacity: .55; }
+  .slot.idle .slot-value { color: var(--muted); font-weight: 500; }
+  .slot.missing { border-color: var(--danger); }
+  .slot.missing::before { background: var(--danger); box-shadow: 0 0 12px var(--danger); }
+  .slot.missing .slot-label { color: var(--danger); }
+  .slot.missing .slot-value { color: var(--danger); font-weight: 500; opacity: .8; }
+  .slot.filled { border-color: var(--good); }
+  .slot.filled::before { background: var(--good); box-shadow: 0 0 12px var(--good); }
+  .slot.filled .slot-label { color: var(--good); }
+  .slot.assumed::before { background: var(--warn); }
+  .slot.assumed .slot-value { color: var(--muted); font-weight: 500; }
+  .slot-pop { animation: slot-pop .28s ease; }
+  @keyframes slot-pop { from { opacity: .3; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
   .chip {
     display: inline-flex; align-items: baseline; gap: .35rem;
     padding: .3rem .55rem; border-radius: 8px; font-size: .75rem;
@@ -380,8 +417,28 @@
     <div data-panel="add" class="panel-off">
       <p class="text-xs mb-2" style="color:var(--muted)">Type it the way you'd say it. Enter to run.</p>
       <input id="cmd-input" class="field w-full px-3 py-2.5 text-sm" placeholder="worksheet due thursday 30min math" autocomplete="off">
-      <div id="cmd-preview" class="mt-3"></div>
-      <button id="cmd-run" class="w-full mt-3 px-3 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent);color:var(--on-accent)">Add</button>
+      <div id="cmd-slots" class="grid grid-cols-2 gap-2 mt-3">
+        <div class="slot idle" data-slot="course">
+          <div class="slot-label"><span class="slot-mark"></span>Course</div>
+          <div class="slot-value">&mdash;</div>
+        </div>
+        <div class="slot idle" data-slot="title">
+          <div class="slot-label"><span class="slot-mark"></span>Title</div>
+          <div class="slot-value">&mdash;</div>
+        </div>
+        <div class="slot idle" data-slot="due">
+          <div class="slot-label"><span class="slot-mark"></span>Due</div>
+          <div class="slot-value">&mdash;</div>
+        </div>
+        <div class="slot idle" data-slot="length">
+          <div class="slot-label"><span class="slot-mark"></span>Length</div>
+          <div class="slot-value">&mdash;</div>
+        </div>
+      </div>
+      <div id="cmd-tonight" class="chip mt-2" style="display:none;border-color:var(--accent)">goes on tonight's list</div>
+      <div id="cmd-simple" class="mt-3"></div>
+      <p id="cmd-note" class="text-xs mt-2" style="color:var(--muted)"></p>
+      <button id="cmd-run" class="w-full mt-3 px-3 py-2.5 rounded-xl text-sm font-semibold" style="background:var(--accent);color:var(--on-accent)">Add</button>
       <div class="mt-6 pt-4 text-xs space-y-1.5" style="border-top:1px solid var(--line);color:var(--muted)">
         <div class="font-semibold mb-1" style="color:var(--text)">It understands</div>
         <div class="mono">essay due friday 45min english</div>
@@ -1341,9 +1398,10 @@ function parseCommand(raw) {
 
   const title = cleanTitle(work);
   const errors = [];
-  if (cr.ambiguous) errors.push(`"${rest.trim()}" could mean ${cr.ambiguous.join(' or ')}. Spell the course out.`);
-  else if (!cr.course) errors.push('No course recognised. Add one of: ' + classList.join(', ') + '.');
-  if (!title) errors.push('No title left over. Say what the assignment is.');
+  const missing = [];
+  if (cr.ambiguous) errors.push(`That could mean ${cr.ambiguous.join(' or ')} — spell the course out.`);
+  else if (!cr.course) missing.push('course');
+  if (!title) missing.push('title');
 
   const assumedDate = !dt.date;
   const date = dt.date || midnight(getNextSchoolDay(new Date()));
@@ -1351,55 +1409,113 @@ function parseCommand(raw) {
   const minutes = dur.minutes != null ? Math.max(1, dur.minutes) : (cr.course ? suggestMinutes(cr.course) : settings.defaultMinutes);
 
   return {
-    kind: 'add', errors, title, course: cr.course, date, minutes,
+    kind: 'add', errors, missing, title, course: cr.course, date, minutes,
     assumedDate, assumedMinutes, forceTonight
   };
 }
 
+const SLOT_MARK = { idle: '', missing: '!', filled: '\u2713', assumed: '~' };
+let slotStates = {};
+
+function setSlot(key, state, value, color) {
+  const el = document.querySelector(`[data-slot="${key}"]`);
+  if (!el) return;
+  el.classList.remove('idle', 'missing', 'filled', 'assumed');
+  el.classList.add(state);
+  el.querySelector('.slot-mark').textContent = SLOT_MARK[state];
+
+  const valueEl = el.querySelector('.slot-value');
+  valueEl.textContent = value;
+  valueEl.style.color = (state === 'filled' && color) ? color : '';
+  valueEl.title = value;
+
+  // Only replay the animation when the state actually flips, not on every key.
+  if (slotStates[key] !== state) {
+    slotStates[key] = state;
+    valueEl.classList.remove('slot-pop');
+    void valueEl.offsetWidth;
+    valueEl.classList.add('slot-pop');
+  }
+}
+
 function renderCmdPreview() {
   const parsed = parseCommand($('cmd-input').value);
-  const box = $('cmd-preview');
+  const slots = $('cmd-slots');
+  const simple = $('cmd-simple');
+  const note = $('cmd-note');
+  const tonightPill = $('cmd-tonight');
   const run = $('cmd-run');
-  const labels = { add: 'Add', done: 'Mark done', tonight: 'Add to tonight', start: 'Start schedule', empty: 'Add' };
-  run.textContent = labels[parsed.kind] || 'Add';
 
-  const ok = parsed.kind !== 'empty' && !parsed.errors.length;
+  const missing = parsed.missing || [];
+  const ok = parsed.kind !== 'empty' && !(parsed.errors || []).length && !missing.length;
   run.disabled = !ok;
-  run.style.opacity = ok ? '1' : '.4';
+  run.style.opacity = ok ? '1' : '.45';
 
-  if (parsed.kind === 'empty') { box.innerHTML = ''; return; }
+  const isAdd = parsed.kind === 'add' || parsed.kind === 'empty';
+  slots.style.display = isAdd ? 'grid' : 'none';
+  tonightPill.style.display = (isAdd && parsed.forceTonight) ? 'inline-flex' : 'none';
+
+  // Commands other than add get a single line instead of the four slots.
+  if (!isAdd) {
+    const labels = { done: 'Mark done', tonight: 'Add to tonight', start: 'Start schedule' };
+    run.textContent = labels[parsed.kind];
+    if (parsed.errors.length) {
+      simple.innerHTML = '';
+      note.textContent = parsed.errors[0];
+      note.style.color = 'var(--danger)';
+      return;
+    }
+    note.textContent = '';
+    simple.innerHTML = parsed.kind === 'start'
+      ? `<span class="chip"><b>${fmtClock(parsed.when.getTime())}</b> &middot; ${tonightTasks().length} task${tonightTasks().length === 1 ? '' : 's'} queued</span>`
+      : `<span class="chip"><span style="color:${colorFor(parsed.task.cls)}"><b>${escapeHtml(parsed.task.cls)}</b></span> ${escapeHtml(parsed.task.name)}</span>`;
+    return;
+  }
+
+  simple.innerHTML = '';
+
+  if (parsed.kind === 'empty') {
+    setSlot('course', 'idle', '\u2014');
+    setSlot('title', 'idle', '\u2014');
+    setSlot('due', 'idle', '\u2014');
+    setSlot('length', 'idle', '\u2014');
+    run.textContent = 'Add';
+    note.textContent = '';
+    note.style.color = 'var(--muted)';
+    return;
+  }
+
+  setSlot('course', parsed.course ? 'filled' : 'missing',
+          parsed.course || 'needed', parsed.course ? colorFor(parsed.course) : null);
+  setSlot('title', parsed.title ? 'filled' : 'missing', parsed.title || 'needed');
+  setSlot('due', parsed.assumedDate ? 'assumed' : 'filled',
+          (parsed.assumedDate ? '(' : '') +
+          parsed.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) +
+          (parsed.assumedDate ? ')' : ''));
+  setSlot('length', parsed.assumedMinutes ? 'assumed' : 'filled',
+          parsed.assumedMinutes ? `(${parsed.minutes} min)` : `${parsed.minutes} min`);
+
+  run.textContent = parsed.course ? `Add to ${parsed.course}` : 'Add';
 
   if (parsed.errors.length) {
-    box.innerHTML = parsed.errors.map(e =>
-      `<p class="text-xs" style="color:var(--danger)">${escapeHtml(e)}</p>`).join('');
-    return;
+    note.textContent = parsed.errors[0];
+    note.style.color = 'var(--danger)';
+  } else if (missing.includes('course')) {
+    note.textContent = `Name a course: ${classList.join(', ')}.`;
+    note.style.color = 'var(--muted)';
+  } else if (missing.includes('title')) {
+    note.textContent = 'Say what the assignment is.';
+    note.style.color = 'var(--muted)';
+  } else {
+    note.textContent = 'Amber values are defaults — say a date or a length to set them.';
+    note.style.color = 'var(--muted)';
+    if (!parsed.assumedDate && !parsed.assumedMinutes) note.textContent = '';
   }
-
-  if (parsed.kind === 'done' || parsed.kind === 'tonight') {
-    box.innerHTML = `<span class="chip"><span style="color:${colorFor(parsed.task.cls)}"><b>${escapeHtml(parsed.task.cls)}</b></span> ${escapeHtml(parsed.task.name)}</span>`;
-    return;
-  }
-  if (parsed.kind === 'start') {
-    box.innerHTML = `<span class="chip"><b>${fmtClock(parsed.when.getTime())}</b> · ${tonightTasks().length} task${tonightTasks().length === 1 ? '' : 's'}</span>`;
-    return;
-  }
-
-  const dueLabel = parsed.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  box.innerHTML = `
-    <div class="flex flex-wrap gap-1.5">
-      <span class="chip"><span style="color:${colorFor(parsed.course)}"><b>${escapeHtml(parsed.course)}</b></span></span>
-      <span class="chip">${escapeHtml(parsed.title)}</span>
-      <span class="chip ${parsed.assumedDate ? 'assumed' : ''}"><span style="color:var(--muted)">due</span> ${dueLabel}</span>
-      <span class="chip ${parsed.assumedMinutes ? 'assumed' : ''}">${parsed.minutes} min</span>
-      ${parsed.forceTonight ? `<span class="chip" style="border-color:var(--accent)">tonight</span>` : ''}
-    </div>
-    ${(parsed.assumedDate || parsed.assumedMinutes)
-      ? `<p class="text-xs mt-2" style="color:var(--muted)">Dashed chips are assumed — say a date or a length to set them.</p>` : ''}`;
 }
 
 function runCommand() {
   const parsed = parseCommand($('cmd-input').value);
-  if (parsed.kind === 'empty' || parsed.errors.length) return;
+  if (parsed.kind === 'empty' || parsed.errors.length || (parsed.missing || []).length) return;
 
   if (parsed.kind === 'done') {
     setTaskDone(parsed.task.id, true);
