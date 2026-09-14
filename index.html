@@ -155,7 +155,7 @@
 
   /* Drawer tabs */
   .drawer-tab {
-    flex: 1; padding: .55rem .15rem; font-size: .7rem; font-weight: 600;
+    padding: .5rem .15rem; font-size: .72rem; font-weight: 600;
     border-radius: 9px; color: var(--muted); background: transparent; white-space: nowrap;
   }
   .slot {
@@ -403,8 +403,9 @@
     <h2 id="drawer-title" class="text-lg font-bold">History</h2>
     <button id="history-close" class="text-2xl leading-none px-1" style="color:var(--muted)">&times;</button>
   </div>
-  <div class="flex gap-1 mx-5 mb-4 p-1 rounded-xl" style="background:var(--panel-2)">
+  <div class="grid grid-cols-3 gap-1 mx-5 mb-4 p-1 rounded-xl" style="background:var(--panel-2)">
     <button class="drawer-tab" data-tab="add">Add</button>
+    <button class="drawer-tab" data-tab="todo">To-do</button>
     <button class="drawer-tab active" data-tab="history">History</button>
     <button class="drawer-tab" data-tab="upcoming">Upcoming</button>
     <button class="drawer-tab" data-tab="music">Music</button>
@@ -448,6 +449,17 @@
         <div class="mono">tonight spanish essay</div>
         <div class="mono">start 7:30pm</div>
       </div>
+    </div>
+
+    <!-- To-do -->
+    <div data-panel="todo" class="panel-off">
+      <div class="flex gap-2 mb-4">
+        <input id="todo-input" class="field flex-1 min-w-0 px-3 py-2 text-sm" placeholder="Something to do\u2026" autocomplete="off">
+        <button id="todo-add" class="px-4 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent);color:var(--on-accent)">Add</button>
+      </div>
+      <ul id="todo-list" class="space-y-1"></ul>
+      <p id="todo-empty" class="text-sm" style="color:var(--muted)">Nothing on the list.</p>
+      <button id="todo-clear" class="hidden text-xs hover:underline mt-4" style="color:var(--muted)">Clear finished</button>
     </div>
 
     <!-- History -->
@@ -805,7 +817,8 @@ let userId = null;
 let tasksCache = {};
 let scheduleMeta = { startAt: null, shiftMs: 0, breakStartedAt: null, completions: {} };
 let weekStart = defaultWeekStart();
-let unsubscribeTasks = null, unsubscribeSchedule = null, unsubscribeSettings = null, unsubscribeHistory = null;
+let unsubscribeTasks = null, unsubscribeSchedule = null, unsubscribeSettings = null,
+    unsubscribeHistory = null, unsubscribeTodos = null;
 let historyCache = {};        // 'YYYY-MM-DD' -> { entries: { taskId: entry } }
 let historyIndex = {};        // taskId -> actualMs, for the planned/actual badges
 let settingsCache = {};
@@ -1177,7 +1190,7 @@ function renderHistory() {
 }
 
 let currentDrawerTab = 'history';
-const DRAWER_TITLES = { add: 'Add', history: 'History', upcoming: 'Upcoming', music: 'Music', settings: 'Settings' };
+const DRAWER_TITLES = { add: 'Add', todo: 'To-do', history: 'History', upcoming: 'Upcoming', music: 'Music', settings: 'Settings' };
 
 function showDrawerTab(name) {
   currentDrawerTab = name;
@@ -1185,6 +1198,7 @@ function showDrawerTab(name) {
   document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('panel-off', p.dataset.panel !== name));
   $('drawer-title').textContent = DRAWER_TITLES[name];
   if (name === 'add') { renderCmdPreview(); setTimeout(() => $('cmd-input').focus(), 60); }
+  if (name === 'todo') { renderTodos(); setTimeout(() => $('todo-input').focus(), 60); }
   if (name === 'history') renderHistory();
   if (name === 'upcoming') renderUpcoming();
   if (name === 'settings') renderSettingsPanel();
@@ -1544,6 +1558,65 @@ function runCommand() {
 
   $('cmd-input').value = '';
   renderCmdPreview();
+}
+
+/* ------------------------------------------------------------------ *
+ * To-do list
+ *
+ * Deliberately separate from assignments: no course, no duration, no due
+ * date, and nothing here ever reaches the schedule.
+ * ------------------------------------------------------------------ */
+
+let todos = [];
+
+async function saveTodos(next) {
+  todos = next;
+  renderTodos();
+  if (!userId || !db) return;
+  try {
+    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/todos`), { items: next });
+  } catch (e) {
+    console.error("Error saving to-dos:", e);
+    showMessage("Couldn't save that. Check your connection and try again.");
+  }
+}
+
+function addTodo() {
+  const input = $('todo-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!requireLogin('keep a to-do list')) return;
+  saveTodos([...todos, { id: crypto.randomUUID(), text, done: false }]);
+  input.value = '';
+}
+
+function renderTodos() {
+  const list = $('todo-list');
+  list.innerHTML = '';
+
+  todos.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'flex items-start gap-2.5 py-1';
+    li.innerHTML = `
+      <button class="todo-check shrink-0 w-4 h-4 rounded-full mt-0.5 flex items-center justify-center"
+              title="${item.done ? 'Mark not done' : 'Mark done'}"
+              style="border:2px solid ${item.done ? 'var(--good)' : 'var(--edge)'};background:${item.done ? 'var(--good)' : 'transparent'};color:var(--on-good)">
+        ${item.done ? CHECK_SVG : ''}
+      </button>
+      <span class="flex-1 min-w-0 text-sm break-words ${item.done ? 'line-through' : ''}"
+            style="color:${item.done ? 'var(--muted)' : 'var(--text)'}">${escapeHtml(item.text)}</span>
+      <button class="todo-del shrink-0 text-lg leading-none px-0.5" title="Delete" style="color:var(--muted)">&times;</button>`;
+
+    li.querySelector('.todo-check').onclick = () =>
+      saveTodos(todos.map(t => t.id === item.id ? { ...t, done: !t.done } : t));
+    li.querySelector('.todo-del').onclick = () =>
+      saveTodos(todos.filter(t => t.id !== item.id));
+
+    list.appendChild(li);
+  });
+
+  $('todo-empty').classList.toggle('hidden', todos.length > 0);
+  $('todo-clear').classList.toggle('hidden', !todos.some(t => t.done));
 }
 
 /* ------------------------------------------------------------------ *
@@ -3070,6 +3143,7 @@ function attachListeners() {
   if (unsubscribeSchedule) { unsubscribeSchedule(); unsubscribeSchedule = null; }
   if (unsubscribeSettings) { unsubscribeSettings(); unsubscribeSettings = null; }
   if (unsubscribeHistory) { unsubscribeHistory(); unsubscribeHistory = null; }
+  if (unsubscribeTodos) { unsubscribeTodos(); unsubscribeTodos = null; }
   tasksLoaded = false; settingsLoaded = false;
 
   const historyRef = collection(db, `artifacts/${appId}/users/${userId}/history`);
@@ -3086,6 +3160,14 @@ function attachListeners() {
     renderTonight();
   }, (error) => {
     console.error("Error fetching history:", error);
+  });
+
+  const todosRef = doc(db, `artifacts/${appId}/users/${userId}/data/todos`);
+  unsubscribeTodos = onSnapshot(todosRef, (snap) => {
+    todos = (snap.exists() && Array.isArray(snap.data().items)) ? snap.data().items : [];
+    renderTodos();
+  }, (error) => {
+    console.error("Error fetching to-dos:", error);
   });
 
   const settingsRef = doc(db, `artifacts/${appId}/users/${userId}/data/settings`);
@@ -3159,6 +3241,8 @@ if (auth) {
       if (unsubscribeSchedule) { unsubscribeSchedule(); unsubscribeSchedule = null; }
       if (unsubscribeSettings) { unsubscribeSettings(); unsubscribeSettings = null; }
       if (unsubscribeHistory) { unsubscribeHistory(); unsubscribeHistory = null; }
+      if (unsubscribeTodos) { unsubscribeTodos(); unsubscribeTodos = null; }
+      todos = []; renderTodos();
       historyCache = {}; historyIndex = {}; settingsCache = {};
       tasksLoaded = false; settingsLoaded = false;
       closeHistory();
@@ -3347,6 +3431,10 @@ document.querySelectorAll('[data-focussched]').forEach(btn => {
     if (focusOn) renderSchedule();
   };
 });
+
+$('todo-add').onclick = addTodo;
+$('todo-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+$('todo-clear').onclick = () => saveTodos(todos.filter(t => !t.done));
 
 $('cmd-input').addEventListener('input', renderCmdPreview);
 $('cmd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') runCommand(); });
