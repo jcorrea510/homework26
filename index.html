@@ -195,6 +195,26 @@
   .slot-pop { animation: slot-pop .28s ease; }
   @keyframes slot-pop { from { opacity: .3; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
+  /* Outliner */
+  .todo-row { display: flex; align-items: flex-start; gap: .5rem; padding: .12rem .25rem; border-radius: 7px; }
+  .todo-row:focus-within { background: var(--panel-2); }
+  .todo-text {
+    flex: 1; min-width: 0; background: transparent; border: none; color: var(--text);
+    font-size: .875rem; line-height: 1.45; padding: .12rem 0;
+  }
+  .todo-text:focus { outline: none; }
+  .todo-text::placeholder { color: var(--muted); opacity: .6; }
+  .todo-row.parent > .todo-text { font-weight: 600; }
+  .todo-row.done > .todo-text { text-decoration: line-through; color: var(--muted); }
+  .todo-box {
+    flex: none; width: 15px; height: 15px; border-radius: 5px; margin-top: .28rem;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--edge); color: var(--on-good); transition: background .15s ease, border-color .15s ease;
+  }
+  .todo-box.on { background: var(--good); border-color: var(--good); }
+  .todo-box.partial { border-color: var(--good); }
+  .todo-box.partial::after { content: ''; width: 7px; height: 2px; border-radius: 2px; background: var(--good); }
+
   .chip {
     display: inline-flex; align-items: baseline; gap: .35rem;
     padding: .3rem .55rem; border-radius: 8px; font-size: .75rem;
@@ -453,12 +473,10 @@
 
     <!-- To-do -->
     <div data-panel="todo" class="panel-off">
-      <div class="flex gap-2 mb-4">
-        <input id="todo-input" class="field flex-1 min-w-0 px-3 py-2 text-sm" placeholder="Something to do\u2026" autocomplete="off">
-        <button id="todo-add" class="px-4 py-2 rounded-xl text-sm font-semibold" style="background:var(--accent);color:var(--on-accent)">Add</button>
-      </div>
-      <ul id="todo-list" class="space-y-1"></ul>
-      <p id="todo-empty" class="text-sm" style="color:var(--muted)">Nothing on the list.</p>
+      <p class="text-xs mb-3" style="color:var(--muted)">
+        Enter for a new line, Tab to nest it under the one above, Shift+Tab to pull it back out.
+      </p>
+      <div id="todo-doc"></div>
       <button id="todo-clear" class="hidden text-xs hover:underline mt-4" style="color:var(--muted)">Clear finished</button>
     </div>
 
@@ -1198,7 +1216,7 @@ function showDrawerTab(name) {
   document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('panel-off', p.dataset.panel !== name));
   $('drawer-title').textContent = DRAWER_TITLES[name];
   if (name === 'add') { renderCmdPreview(); setTimeout(() => $('cmd-input').focus(), 60); }
-  if (name === 'todo') { renderTodos(); setTimeout(() => $('todo-input').focus(), 60); }
+  if (name === 'todo') { renderTodos(); setTimeout(() => { const f = $('todo-doc').querySelector('.todo-text'); if (f) f.focus(); }, 60); }
   if (name === 'history') renderHistory();
   if (name === 'upcoming') renderUpcoming();
   if (name === 'settings') renderSettingsPanel();
@@ -1568,55 +1586,181 @@ function runCommand() {
  * ------------------------------------------------------------------ */
 
 let todos = [];
+let todoSaveTimer = null, todoLastSaved = null;
+const MAX_DEPTH = 4;
 
-async function saveTodos(next) {
-  todos = next;
-  renderTodos();
+/* Tree helpers. The list is flat; depth is what makes it a tree. */
+function descendantsOf(list, i) {
+  const out = [];
+  for (let j = i + 1; j < list.length && list[j].depth > list[i].depth; j++) out.push(j);
+  return out;
+}
+function childrenOf(list, i) {
+  return descendantsOf(list, i).filter(j => list[j].depth === list[i].depth + 1);
+}
+
+/**
+ * A line with children is done exactly when all of them are. Walking backwards
+ * means children are already settled by the time we reach their parent, so one
+ * pass resolves the whole tree however deep it goes.
+ */
+function normalizeTodos(list) {
+  for (let i = list.length - 1; i >= 0; i--) {
+    const kids = childrenOf(list, i);
+    if (kids.length) list[i].done = kids.every(j => list[j].done);
+  }
+  return list;
+}
+
+function todoState(i) {
+  const kids = childrenOf(todos, i);
+  if (!kids.length) return todos[i].done ? 'on' : '';
+  const doneCount = kids.filter(j => todos[j].done).length;
+  if (doneCount === kids.length) return 'on';
+  return doneCount > 0 ? 'partial' : '';
+}
+
+async function saveTodos() {
+  clearTimeout(todoSaveTimer);
+  const payload = JSON.stringify(todos);
+  todoLastSaved = payload;
   if (!userId || !db) return;
   try {
-    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/todos`), { items: next });
+    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/data/todos`), { items: todos });
   } catch (e) {
     console.error("Error saving to-dos:", e);
-    showMessage("Couldn't save that. Check your connection and try again.");
+  }
+}
+function queueSaveTodos() {
+  clearTimeout(todoSaveTimer);
+  todoSaveTimer = setTimeout(saveTodos, 700);
+}
+
+const newTodo = (depth = 0, text = '') => ({ id: crypto.randomUUID(), text, depth, done: false });
+
+function renderTodos(focusId, caret) {
+  const doc = $('todo-doc');
+  if (!doc) return;
+  if (!todos.length) todos = [newTodo()];
+
+  doc.innerHTML = '';
+  todos.forEach((item, i) => {
+    const state = todoState(i);
+    const row = document.createElement('div');
+    row.className = `todo-row ${state === 'on' ? 'done' : ''} ${childrenOf(todos, i).length ? 'parent' : ''}`;
+    row.dataset.id = item.id;
+    if (item.depth) {
+      row.style.marginLeft = `${item.depth * 0.85}rem`;
+      row.style.borderLeft = '1px solid var(--line)';
+      row.style.paddingLeft = '.55rem';
+    }
+
+    const box = document.createElement('button');
+    box.className = `todo-box ${state}`;
+    box.innerHTML = state === 'on' ? CHECK_SVG : '';
+    box.onclick = () => {
+      const next = !todos[i].done;
+      todos[i].done = next;
+      descendantsOf(todos, i).forEach(j => { todos[j].done = next; });
+      normalizeTodos(todos);
+      renderTodos();
+      saveTodos();
+    };
+
+    const input = document.createElement('input');
+    input.className = 'todo-text';
+    input.value = item.text;
+    input.placeholder = i === 0 && todos.length === 1 ? 'AP Classroom' : '';
+    input.oninput = () => { todos[i].text = input.value; queueSaveTodos(); };
+    input.onkeydown = (e) => handleTodoKey(e, i, input);
+
+    row.append(box, input);
+    doc.appendChild(row);
+  });
+
+  $('todo-clear').classList.toggle('hidden', !todos.some(t => t.done));
+
+  if (focusId) {
+    const target = doc.querySelector(`[data-id="${focusId}"] .todo-text`);
+    if (target) {
+      target.focus();
+      const at = caret == null ? target.value.length : caret;
+      target.setSelectionRange(at, at);
+    }
   }
 }
 
-function addTodo() {
-  const input = $('todo-input');
-  const text = input.value.trim();
-  if (!text) return;
-  if (!requireLogin('keep a to-do list')) return;
-  saveTodos([...todos, { id: crypto.randomUUID(), text, done: false }]);
-  input.value = '';
+function handleTodoKey(e, i, input) {
+  const item = todos[i];
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    // Enter on an empty nested line pulls it back out instead of adding another.
+    if (!input.value.trim() && item.depth > 0) {
+      item.depth--;
+      normalizeTodos(todos);
+      renderTodos(item.id, 0);
+      saveTodos();
+      return;
+    }
+    const caret = input.selectionStart ?? input.value.length;
+    const after = input.value.slice(caret);
+    item.text = input.value.slice(0, caret);
+    const created = newTodo(item.depth, after);
+    // Land after this line's whole subtree, so nesting stays intact.
+    const insertAt = i + 1 + descendantsOf(todos, i).length;
+    todos.splice(insertAt, 0, created);
+    normalizeTodos(todos);
+    renderTodos(created.id, 0);
+    saveTodos();
+    return;
+  }
+
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const caret = input.selectionStart;
+    const delta = e.shiftKey ? -1 : 1;
+    const prev = todos[i - 1];
+    if (delta > 0 && (!prev || item.depth > prev.depth || item.depth >= MAX_DEPTH)) return;
+    if (delta < 0 && item.depth === 0) return;
+    const moving = descendantsOf(todos, i);
+    item.depth += delta;
+    moving.forEach(j => { todos[j].depth += delta; });
+    normalizeTodos(todos);
+    renderTodos(item.id, caret);
+    saveTodos();
+    return;
+  }
+
+  if (e.key === 'Backspace' && !input.value && input.selectionStart === 0) {
+    if (todos.length === 1) return;
+    e.preventDefault();
+    // Promote anything nested under it rather than orphaning it.
+    descendantsOf(todos, i).forEach(j => { todos[j].depth = Math.max(0, todos[j].depth - 1); });
+    todos.splice(i, 1);
+    const focus = todos[Math.max(0, i - 1)];
+    normalizeTodos(todos);
+    renderTodos(focus.id);
+    saveTodos();
+    return;
+  }
+
+  if (e.key === 'ArrowUp' && i > 0) {
+    e.preventDefault();
+    renderTodos(todos[i - 1].id, input.selectionStart);
+  }
+  if (e.key === 'ArrowDown' && i < todos.length - 1) {
+    e.preventDefault();
+    renderTodos(todos[i + 1].id, input.selectionStart);
+  }
 }
 
-function renderTodos() {
-  const list = $('todo-list');
-  list.innerHTML = '';
-
-  todos.forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'flex items-start gap-2.5 py-1';
-    li.innerHTML = `
-      <button class="todo-check shrink-0 w-4 h-4 rounded-full mt-0.5 flex items-center justify-center"
-              title="${item.done ? 'Mark not done' : 'Mark done'}"
-              style="border:2px solid ${item.done ? 'var(--good)' : 'var(--edge)'};background:${item.done ? 'var(--good)' : 'transparent'};color:var(--on-good)">
-        ${item.done ? CHECK_SVG : ''}
-      </button>
-      <span class="flex-1 min-w-0 text-sm break-words ${item.done ? 'line-through' : ''}"
-            style="color:${item.done ? 'var(--muted)' : 'var(--text)'}">${escapeHtml(item.text)}</span>
-      <button class="todo-del shrink-0 text-lg leading-none px-0.5" title="Delete" style="color:var(--muted)">&times;</button>`;
-
-    li.querySelector('.todo-check').onclick = () =>
-      saveTodos(todos.map(t => t.id === item.id ? { ...t, done: !t.done } : t));
-    li.querySelector('.todo-del').onclick = () =>
-      saveTodos(todos.filter(t => t.id !== item.id));
-
-    list.appendChild(li);
-  });
-
-  $('todo-empty').classList.toggle('hidden', todos.length > 0);
-  $('todo-clear').classList.toggle('hidden', !todos.some(t => t.done));
+function clearFinishedTodos() {
+  todos = todos.filter(t => !t.done);
+  if (!todos.length) todos = [newTodo()];
+  normalizeTodos(todos);
+  renderTodos();
+  saveTodos();
 }
 
 /* ------------------------------------------------------------------ *
@@ -3164,7 +3308,12 @@ function attachListeners() {
 
   const todosRef = doc(db, `artifacts/${appId}/users/${userId}/data/todos`);
   unsubscribeTodos = onSnapshot(todosRef, (snap) => {
-    todos = (snap.exists() && Array.isArray(snap.data().items)) ? snap.data().items : [];
+    const incoming = (snap.exists() && Array.isArray(snap.data().items)) ? snap.data().items : [];
+    // Don't clobber what's being typed: only repaint when the change came from elsewhere.
+    const payload = JSON.stringify(incoming);
+    if (payload === todoLastSaved) return;
+    todoLastSaved = payload;
+    todos = incoming;
     renderTodos();
   }, (error) => {
     console.error("Error fetching to-dos:", error);
@@ -3242,7 +3391,7 @@ if (auth) {
       if (unsubscribeSettings) { unsubscribeSettings(); unsubscribeSettings = null; }
       if (unsubscribeHistory) { unsubscribeHistory(); unsubscribeHistory = null; }
       if (unsubscribeTodos) { unsubscribeTodos(); unsubscribeTodos = null; }
-      todos = []; renderTodos();
+      todos = []; todoLastSaved = null; renderTodos();
       historyCache = {}; historyIndex = {}; settingsCache = {};
       tasksLoaded = false; settingsLoaded = false;
       closeHistory();
@@ -3432,9 +3581,7 @@ document.querySelectorAll('[data-focussched]').forEach(btn => {
   };
 });
 
-$('todo-add').onclick = addTodo;
-$('todo-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
-$('todo-clear').onclick = () => saveTodos(todos.filter(t => !t.done));
+$('todo-clear').onclick = clearFinishedTodos;
 
 $('cmd-input').addEventListener('input', renderCmdPreview);
 $('cmd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') runCommand(); });
