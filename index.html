@@ -214,6 +214,21 @@
   .todo-box.on { background: var(--good); border-color: var(--good); }
   .todo-box.partial { border-color: var(--good); }
   .todo-box.partial::after { content: ''; width: 7px; height: 2px; border-radius: 2px; background: var(--good); }
+  #todo-doc { position: relative; }
+  .todo-grip {
+    flex: none; width: 13px; height: 16px; margin-top: .28rem; color: var(--muted);
+    opacity: 0; cursor: grab; touch-action: none; transition: opacity .15s ease;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .todo-row:hover .todo-grip, .todo-row:focus-within .todo-grip { opacity: .65; }
+  body.compact .todo-grip { opacity: .45; }
+  .todo-row.dragging { opacity: .35; }
+  .todo-row.dragging .todo-grip { cursor: grabbing; }
+  .todo-drop {
+    position: absolute; height: 2px; right: 0; border-radius: 2px;
+    background: var(--accent); box-shadow: 0 0 8px var(--accent); pointer-events: none;
+  }
+  body.dragging-todo { user-select: none; }
 
   .chip {
     display: inline-flex; align-items: baseline; gap: .35rem;
@@ -1638,6 +1653,92 @@ function queueSaveTodos() {
 
 const newTodo = (depth = 0, text = '') => ({ id: crypto.randomUUID(), text, depth, done: false });
 
+const GRIP_SVG = '<svg viewBox="0 0 10 16" fill="currentColor" width="10" height="16">' +
+  '<circle cx="3" cy="4" r="1.2"/><circle cx="7" cy="4" r="1.2"/>' +
+  '<circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/>' +
+  '<circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
+
+const INDENT_REM = 0.85;
+
+/* ------------------------------------------------------------------ *
+ * Dragging
+ *
+ * A line always travels with everything nested under it, so dragging a
+ * heading takes its contents and dragging a leaf takes only itself.
+ * Pointer events rather than HTML5 drag-and-drop, so this works on touch.
+ * ------------------------------------------------------------------ */
+
+let dragIndex = null, dragSize = 0, dragMoved = false, dragStartY = 0, dropPlan = null;
+
+/** Where the block would land, and how deep, for the current pointer position. */
+function planDrop(clientX, clientY) {
+  const doc = $('todo-doc');
+  const rows = [...doc.querySelectorAll('.todo-row')];
+
+  let insertAt = todos.length;
+  for (let k = 0; k < rows.length; k++) {
+    const box = rows[k].getBoundingClientRect();
+    if (clientY < box.top + box.height / 2) { insertAt = k; break; }
+  }
+
+  // Index within the list once the dragged block is lifted out.
+  let target = insertAt > dragIndex ? insertAt - dragSize : insertAt;
+  const remaining = todos.length - dragSize;
+  target = Math.max(0, Math.min(remaining, target));
+
+  const rest = [...todos.slice(0, dragIndex), ...todos.slice(dragIndex + dragSize)];
+  const prev = rest[target - 1];
+  const maxDepth = prev ? Math.min(prev.depth + 1, MAX_DEPTH) : 0;
+
+  // Horizontal position picks the depth, the way you'd expect in an outliner.
+  const indentPx = INDENT_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const wanted = Math.round((clientX - doc.getBoundingClientRect().left) / indentPx);
+  const depth = Math.max(0, Math.min(maxDepth, wanted));
+
+  const docBox = doc.getBoundingClientRect();
+  let top;
+  if (insertAt < rows.length) top = rows[insertAt].getBoundingClientRect().top - docBox.top;
+  else if (rows.length) {
+    const last = rows[rows.length - 1].getBoundingClientRect();
+    top = last.bottom - docBox.top;
+  } else top = 0;
+
+  let line = doc.querySelector('.todo-drop');
+  if (!line) { line = document.createElement('div'); line.className = 'todo-drop'; doc.appendChild(line); }
+  line.style.top = `${top - 1}px`;
+  line.style.left = `${depth * indentPx}px`;
+
+  return { target, depth };
+}
+
+function moveTodoBlock(from, size, target, depth) {
+  const block = todos.slice(from, from + size);
+  const rest = [...todos.slice(0, from), ...todos.slice(from + size)];
+  const delta = depth - block[0].depth;
+  block.forEach(b => { b.depth = Math.max(0, Math.min(MAX_DEPTH, b.depth + delta)); });
+  rest.splice(Math.max(0, Math.min(rest.length, target)), 0, ...block);
+  todos = normalizeTodos(rest);
+}
+
+function endTodoDrag(commit) {
+  const doc = $('todo-doc');
+  const line = doc && doc.querySelector('.todo-drop');
+  if (line) line.remove();
+  document.body.classList.remove('dragging-todo');
+
+  const from = dragIndex, size = dragSize, plan = dropPlan, moved = dragMoved;
+  dragIndex = null; dragSize = 0; dragMoved = false; dropPlan = null;
+
+  if (commit && moved && plan && from != null) {
+    const id = todos[from].id;
+    moveTodoBlock(from, size, plan.target, plan.depth);
+    renderTodos(id);
+    saveTodos();
+  } else if (moved) {
+    renderTodos();
+  }
+}
+
 function renderTodos(focusId, caret) {
   const doc = $('todo-doc');
   if (!doc) return;
@@ -1654,6 +1755,34 @@ function renderTodos(focusId, caret) {
       row.style.borderLeft = '1px solid var(--line)';
       row.style.paddingLeft = '.55rem';
     }
+
+    const grip = document.createElement('span');
+    grip.className = 'todo-grip';
+    grip.innerHTML = GRIP_SVG;
+    grip.title = 'Drag to move';
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      dragIndex = i;
+      dragSize = 1 + descendantsOf(todos, i).length;
+      dragMoved = false;
+      dragStartY = e.clientY;
+      dropPlan = null;
+      grip.setPointerCapture(e.pointerId);
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (dragIndex === null) return;
+      if (!dragMoved) {
+        if (Math.abs(e.clientY - dragStartY) < 5) return;
+        dragMoved = true;
+        document.body.classList.add('dragging-todo');
+        const rows = [...$('todo-doc').querySelectorAll('.todo-row')];
+        for (let k = dragIndex; k < dragIndex + dragSize; k++) rows[k]?.classList.add('dragging');
+      }
+      dropPlan = planDrop(e.clientX, e.clientY);
+      autoScrollDrag(e.clientY);
+    });
+    grip.addEventListener('pointerup', () => endTodoDrag(true));
+    grip.addEventListener('pointercancel', () => endTodoDrag(false));
 
     const box = document.createElement('button');
     box.className = `todo-box ${state}`;
@@ -1674,7 +1803,7 @@ function renderTodos(focusId, caret) {
     input.oninput = () => { todos[i].text = input.value; queueSaveTodos(); };
     input.onkeydown = (e) => handleTodoKey(e, i, input);
 
-    row.append(box, input);
+    row.append(grip, box, input);
     doc.appendChild(row);
   });
 
@@ -1753,6 +1882,15 @@ function handleTodoKey(e, i, input) {
     e.preventDefault();
     renderTodos(todos[i + 1].id, input.selectionStart);
   }
+}
+
+/** Keeps the drawer scrolling when you drag a line toward its edge. */
+function autoScrollDrag(clientY) {
+  const scroller = $('todo-doc').closest('.overflow-y-auto');
+  if (!scroller) return;
+  const box = scroller.getBoundingClientRect();
+  if (clientY < box.top + 48) scroller.scrollTop -= 10;
+  else if (clientY > box.bottom - 48) scroller.scrollTop += 10;
 }
 
 function clearFinishedTodos() {
